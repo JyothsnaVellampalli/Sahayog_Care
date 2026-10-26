@@ -1,0 +1,65 @@
+.ma {
+  max-width: 720px;
+}
+
+.ma__heading {
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0 0 16px;
+  color: #202124;
+}
+
+.ma__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: #fff;
+  border: 1px solid #ebedef;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ma__table th,
+.ma__table td {
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid #ebedef;
+}
+
+.ma__table th {
+  background: #f8f9fa;
+  color: #5f6368;
+  font-weight: 500;
+}
+
+.ma__empty {
+  color: #5f6368;
+  text-align: center;
+  padding: 28px 16px;
+}
+
+.ma__status {
+  font-size: 14px;
+  color: #5f6368;
+}
+
+.ma__status--error {
+  color: #c5221f;
+}
+
+.ma__row--emergency td {
+  background: #fff5f5;
+}
+
+.ma__tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ma__tag--emergency {
+  background: #fce8e6;
+  color: #c5221f;
+}

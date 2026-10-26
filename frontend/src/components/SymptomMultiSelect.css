@@ -1,0 +1,122 @@
+.sms {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sms__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #202124;
+}
+
+/* Selected chips */
+.sms__chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sms__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 12px;
+  background: #e8f0fe;
+  color: #174ea6;
+  border: 1px solid #c6dafc;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.sms__chip-label {
+  line-height: 1.2;
+}
+
+.sms__chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #174ea6;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.sms__chip-remove:hover {
+  background: #c6dafc;
+}
+
+/* Combobox input */
+.sms__field {
+  display: flex;
+}
+
+.sms__input {
+  width: 100%;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  background: #fff;
+  color: #202124;
+}
+
+.sms__input::placeholder {
+  color: #5f6368;
+}
+
+.sms__hint {
+  margin: 0;
+  font-size: 12px;
+  color: #5f6368;
+}
+
+/* Listbox popup */
+.sms__listbox {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(60, 64, 67, 0.18);
+}
+
+.sms__option {
+  padding: 9px 12px;
+  font-size: 14px;
+  color: #202124;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Hover + keyboard-active share a clear, high-contrast highlight. */
+.sms__option:hover,
+.sms__option--active {
+  background: #e8f0fe;
+  color: #174ea6;
+}
+
+.sms__empty {
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #5f6368;
+}
+/* .sr-only lives in index.css so it is available site-wide. */

@@ -1,0 +1,54 @@
+{
+  "_comment": "Category buckets used by the triage classifier prompt. Edit this file to change which symptoms count toward each category; the prompt builder reads from here so no code change is needed. Status is DRAFT_PENDING_CLINICIAN until a clinician approves (PRD sections 6 and 9). 'catalogue' entries reference ids/codes in symptoms.json. 'text_only' entries describe red flags that have no matching catalogue symptom and must be detected from the patient's free text.",
+  "status": "DRAFT_PENDING_CLINICIAN",
+  "source": "References/Categorise_symptom.txt",
+  "categories": {
+    "Emergency": {
+      "description": "Any one of these, present and not negated, makes the category Emergency. Stop and hand off to a person (handoff implemented in a later phase).",
+      "catalogue": [
+        { "id": "S019", "code": "chest_pain", "note": "chest pain or pressure" },
+        { "id": "S015", "code": "breathlessness", "note": "trouble breathing or breathlessness" },
+        { "id": "S022", "code": "coma", "note": "unconscious, not waking up, or no response" },
+        { "id": "S005", "code": "altered_sensorium", "note": "new confusion" },
+        { "id": "S124", "code": "weakness_of_one_body_side", "note": "one-sided weakness or numbness" },
+        { "id": "S101", "code": "slurred_speech", "note": "slurred speech" },
+        { "id": "S123", "code": "weakness_in_limbs", "note": "limb weakness" },
+        { "id": "S012", "code": "blood_in_sputum", "note": "coughing blood" },
+        { "id": "S106", "code": "stomach_bleeding", "note": "vomiting blood / internal bleeding" },
+        { "id": "S013", "code": "bloody_stool", "note": "blood in stool" },
+        { "id": "S105", "code": "stiff_neck", "note": "fever with headache and stiff neck (combine with fever + headache)" }
+      ],
+      "text_only": [
+        "seizure or fits",
+        "sudden or worst-ever headache",
+        "thoughts of suicide or self-harm",
+        "face drooping"
+      ]
+    },
+    "Severe": {
+      "description": "Any one of these makes the category Severe (unless an Emergency rule already fired). Several are combination rules evaluated with AGE, SEX, PREGNANT and DURATION_DAYS.",
+      "catalogue": [
+        { "id": "S045", "code": "high_fever", "note": "fever; escalates with age <5, age >=65, vomiting, diarrhoea or dehydration" },
+        { "id": "S064", "code": "mild_fever", "note": "fever; escalates with age <5, age >=65, vomiting, diarrhoea or dehydration" },
+        { "id": "S121", "code": "vomiting", "note": "escalates fever" },
+        { "id": "S032", "code": "diarrhoea", "note": "escalates fever" },
+        { "id": "S030", "code": "dehydration", "note": "escalates fever" },
+        { "id": "S035", "code": "dizziness", "note": "dizziness on standing" },
+        { "id": "S083", "code": "polyuria", "note": "urinary change" },
+        { "id": "S025", "code": "continuous_feel_of_urine", "note": "urinary change" }
+      ],
+      "text_only": [
+        "pregnant and any new symptom other than mild cold symptoms",
+        "duration 3 days or more and more than one symptom",
+        "passing very little urine",
+        "pain severe enough to stop daily activity",
+        "symptoms from three or more different body areas"
+      ]
+    },
+    "Normal": {
+      "description": "No Emergency or Severe rule applies. Everything not escalated falls here.",
+      "catalogue": [],
+      "text_only": []
+    }
+  }
+}

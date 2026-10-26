@@ -1,0 +1,31 @@
+# Sahayog Care - Backend dependencies
+# Target runtime: Python 3.12 (per PRD section 7)
+# Versions pinned to current stable releases (checked 2026-10-26).
+# Re-check against changelogs before upgrading.
+
+# --- Web framework (Phase 1.1) ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+# pydantic 2.11.x required by the supabase client (realtime>=2.11.7).
+pydantic==2.11.10
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# --- Phase 1.2: booking flow ---
+# Workflow orchestration (PRD section 7: LangGraph 1.2.x).
+langgraph==1.2.17
+# Tracing/observability for the graph (PRD section 7: every run has a trace id).
+langsmith==0.14.12
+# Supabase client for the symptom catalogue and appointment data.
+supabase==2.33.0
+# OpenAI-compatible SDK used to call the classifier model through OpenRouter.
+openai==1.59.6
+# HTTP client (also pulled in transitively; pinned for the model adapter).
+httpx==0.28.1
+
+# --- Optional, stronger de-identification ---
+# The de-identification node works out of the box with a built-in regex scrubber.
+# For ML-backed PII detection (PRD section 7 names presidio), additionally install
+# backend/requirements-deid.txt and download the spaCy model:
+#   pip install -r requirements-deid.txt
+#   python -m spacy download en_core_web_sm

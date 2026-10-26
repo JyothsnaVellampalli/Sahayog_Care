@@ -1,0 +1,791 @@
+{
+  "source": "Kaggle disease-symptom-description-dataset (Symptom-severity.csv)",
+  "weight_scale": "1 (mild) to 7 (severe)",
+  "excluded": [
+    "extra_marital_contacts",
+    "prognosis"
+  ],
+  "count": 130,
+  "symptoms": [
+    {
+      "id": "S001",
+      "code": "abdominal_pain",
+      "label": "Abdominal pain",
+      "weight": 4
+    },
+    {
+      "id": "S002",
+      "code": "abnormal_menstruation",
+      "label": "Abnormal menstruation",
+      "weight": 6
+    },
+    {
+      "id": "S003",
+      "code": "acidity",
+      "label": "Acidity",
+      "weight": 3
+    },
+    {
+      "id": "S004",
+      "code": "acute_liver_failure",
+      "label": "Acute liver failure",
+      "weight": 6
+    },
+    {
+      "id": "S005",
+      "code": "altered_sensorium",
+      "label": "Altered sensorium",
+      "weight": 2
+    },
+    {
+      "id": "S006",
+      "code": "anxiety",
+      "label": "Anxiety",
+      "weight": 4
+    },
+    {
+      "id": "S007",
+      "code": "back_pain",
+      "label": "Back pain",
+      "weight": 3
+    },
+    {
+      "id": "S008",
+      "code": "belly_pain",
+      "label": "Belly pain",
+      "weight": 4
+    },
+    {
+      "id": "S009",
+      "code": "blackheads",
+      "label": "Blackheads",
+      "weight": 2
+    },
+    {
+      "id": "S010",
+      "code": "bladder_discomfort",
+      "label": "Bladder discomfort",
+      "weight": 4
+    },
+    {
+      "id": "S011",
+      "code": "blister",
+      "label": "Blister",
+      "weight": 4
+    },
+    {
+      "id": "S012",
+      "code": "blood_in_sputum",
+      "label": "Blood in sputum",
+      "weight": 5
+    },
+    {
+      "id": "S013",
+      "code": "bloody_stool",
+      "label": "Bloody stool",
+      "weight": 5
+    },
+    {
+      "id": "S014",
+      "code": "blurred_and_distorted_vision",
+      "label": "Blurred and distorted vision",
+      "weight": 5
+    },
+    {
+      "id": "S015",
+      "code": "breathlessness",
+      "label": "Breathlessness",
+      "weight": 4
+    },
+    {
+      "id": "S016",
+      "code": "brittle_nails",
+      "label": "Brittle nails",
+      "weight": 5
+    },
+    {
+      "id": "S017",
+      "code": "bruising",
+      "label": "Bruising",
+      "weight": 4
+    },
+    {
+      "id": "S018",
+      "code": "burning_micturition",
+      "label": "Burning micturition",
+      "weight": 6
+    },
+    {
+      "id": "S019",
+      "code": "chest_pain",
+      "label": "Chest pain",
+      "weight": 7
+    },
+    {
+      "id": "S020",
+      "code": "chills",
+      "label": "Chills",
+      "weight": 3
+    },
+    {
+      "id": "S021",
+      "code": "cold_hands_and_feets",
+      "label": "Cold hands and feet",
+      "weight": 5
+    },
+    {
+      "id": "S022",
+      "code": "coma",
+      "label": "Coma",
+      "weight": 7
+    },
+    {
+      "id": "S023",
+      "code": "congestion",
+      "label": "Congestion",
+      "weight": 5
+    },
+    {
+      "id": "S024",
+      "code": "constipation",
+      "label": "Constipation",
+      "weight": 4
+    },
+    {
+      "id": "S025",
+      "code": "continuous_feel_of_urine",
+      "label": "Continuous urge to urinate",
+      "weight": 6
+    },
+    {
+      "id": "S026",
+      "code": "continuous_sneezing",
+      "label": "Continuous sneezing",
+      "weight": 4
+    },
+    {
+      "id": "S027",
+      "code": "cough",
+      "label": "Cough",
+      "weight": 4
+    },
+    {
+      "id": "S028",
+      "code": "cramps",
+      "label": "Cramps",
+      "weight": 4
+    },
+    {
+      "id": "S029",
+      "code": "dark_urine",
+      "label": "Dark urine",
+      "weight": 4
+    },
+    {
+      "id": "S030",
+      "code": "dehydration",
+      "label": "Dehydration",
+      "weight": 4
+    },
+    {
+      "id": "S031",
+      "code": "depression",
+      "label": "Depression",
+      "weight": 3
+    },
+    {
+      "id": "S032",
+      "code": "diarrhoea",
+      "label": "Diarrhoea",
+      "weight": 6
+    },
+    {
+      "id": "S033",
+      "code": "dischromic_patches",
+      "label": "Discoloured skin patches",
+      "weight": 6
+    },
+    {
+      "id": "S034",
+      "code": "distention_of_abdomen",
+      "label": "Distention of abdomen",
+      "weight": 4
+    },
+    {
+      "id": "S035",
+      "code": "dizziness",
+      "label": "Dizziness",
+      "weight": 4
+    },
+    {
+      "id": "S036",
+      "code": "drying_and_tingling_lips",
+      "label": "Drying and tingling lips",
+      "weight": 4
+    },
+    {
+      "id": "S037",
+      "code": "enlarged_thyroid",
+      "label": "Enlarged thyroid",
+      "weight": 6
+    },
+    {
+      "id": "S038",
+      "code": "excessive_hunger",
+      "label": "Excessive hunger",
+      "weight": 4
+    },
+    {
+      "id": "S039",
+      "code": "family_history",
+      "label": "Family history",
+      "weight": 5
+    },
+    {
+      "id": "S040",
+      "code": "fast_heart_rate",
+      "label": "Fast heart rate",
+      "weight": 5
+    },
+    {
+      "id": "S041",
+      "code": "fatigue",
+      "label": "Fatigue",
+      "weight": 4
+    },
+    {
+      "id": "S042",
+      "code": "fluid_overload",
+      "label": "Fluid overload",
+      "weight": 6
+    },
+    {
+      "id": "S043",
+      "code": "foul_smell_ofurine",
+      "label": "Foul smell of urine",
+      "weight": 5
+    },
+    {
+      "id": "S044",
+      "code": "headache",
+      "label": "Headache",
+      "weight": 3
+    },
+    {
+      "id": "S045",
+      "code": "high_fever",
+      "label": "High fever",
+      "weight": 7
+    },
+    {
+      "id": "S046",
+      "code": "hip_joint_pain",
+      "label": "Hip joint pain",
+      "weight": 2
+    },
+    {
+      "id": "S047",
+      "code": "history_of_alcohol_consumption",
+      "label": "History of alcohol consumption",
+      "weight": 5
+    },
+    {
+      "id": "S048",
+      "code": "increased_appetite",
+      "label": "Increased appetite",
+      "weight": 5
+    },
+    {
+      "id": "S049",
+      "code": "indigestion",
+      "label": "Indigestion",
+      "weight": 5
+    },
+    {
+      "id": "S050",
+      "code": "inflammatory_nails",
+      "label": "Inflammatory nails",
+      "weight": 2
+    },
+    {
+      "id": "S051",
+      "code": "internal_itching",
+      "label": "Internal itching",
+      "weight": 4
+    },
+    {
+      "id": "S052",
+      "code": "irregular_sugar_level",
+      "label": "Irregular sugar level",
+      "weight": 5
+    },
+    {
+      "id": "S053",
+      "code": "irritability",
+      "label": "Irritability",
+      "weight": 2
+    },
+    {
+      "id": "S054",
+      "code": "irritation_in_anus",
+      "label": "Irritation in anus",
+      "weight": 6
+    },
+    {
+      "id": "S055",
+      "code": "itching",
+      "label": "Itching",
+      "weight": 1
+    },
+    {
+      "id": "S056",
+      "code": "joint_pain",
+      "label": "Joint pain",
+      "weight": 3
+    },
+    {
+      "id": "S057",
+      "code": "knee_pain",
+      "label": "Knee pain",
+      "weight": 3
+    },
+    {
+      "id": "S058",
+      "code": "lack_of_concentration",
+      "label": "Lack of concentration",
+      "weight": 3
+    },
+    {
+      "id": "S059",
+      "code": "lethargy",
+      "label": "Lethargy",
+      "weight": 2
+    },
+    {
+      "id": "S060",
+      "code": "loss_of_appetite",
+      "label": "Loss of appetite",
+      "weight": 4
+    },
+    {
+      "id": "S061",
+      "code": "loss_of_balance",
+      "label": "Loss of balance",
+      "weight": 4
+    },
+    {
+      "id": "S062",
+      "code": "loss_of_smell",
+      "label": "Loss of smell",
+      "weight": 3
+    },
+    {
+      "id": "S063",
+      "code": "malaise",
+      "label": "Malaise",
+      "weight": 6
+    },
+    {
+      "id": "S064",
+      "code": "mild_fever",
+      "label": "Mild fever",
+      "weight": 5
+    },
+    {
+      "id": "S065",
+      "code": "mood_swings",
+      "label": "Mood swings",
+      "weight": 3
+    },
+    {
+      "id": "S066",
+      "code": "movement_stiffness",
+      "label": "Movement stiffness",
+      "weight": 5
+    },
+    {
+      "id": "S067",
+      "code": "mucoid_sputum",
+      "label": "Mucoid sputum",
+      "weight": 4
+    },
+    {
+      "id": "S068",
+      "code": "muscle_pain",
+      "label": "Muscle pain",
+      "weight": 2
+    },
+    {
+      "id": "S069",
+      "code": "muscle_wasting",
+      "label": "Muscle wasting",
+      "weight": 3
+    },
+    {
+      "id": "S070",
+      "code": "muscle_weakness",
+      "label": "Muscle weakness",
+      "weight": 2
+    },
+    {
+      "id": "S071",
+      "code": "nausea",
+      "label": "Nausea",
+      "weight": 5
+    },
+    {
+      "id": "S072",
+      "code": "neck_pain",
+      "label": "Neck pain",
+      "weight": 5
+    },
+    {
+      "id": "S073",
+      "code": "nodal_skin_eruptions",
+      "label": "Nodal skin eruptions",
+      "weight": 4
+    },
+    {
+      "id": "S074",
+      "code": "obesity",
+      "label": "Obesity",
+      "weight": 4
+    },
+    {
+      "id": "S075",
+      "code": "pain_behind_the_eyes",
+      "label": "Pain behind the eyes",
+      "weight": 4
+    },
+    {
+      "id": "S076",
+      "code": "pain_during_bowel_movements",
+      "label": "Pain during bowel movements",
+      "weight": 5
+    },
+    {
+      "id": "S077",
+      "code": "pain_in_anal_region",
+      "label": "Pain in anal region",
+      "weight": 6
+    },
+    {
+      "id": "S078",
+      "code": "painful_walking",
+      "label": "Painful walking",
+      "weight": 2
+    },
+    {
+      "id": "S079",
+      "code": "palpitations",
+      "label": "Palpitations",
+      "weight": 4
+    },
+    {
+      "id": "S080",
+      "code": "passage_of_gases",
+      "label": "Passage of gases",
+      "weight": 5
+    },
+    {
+      "id": "S081",
+      "code": "patches_in_throat",
+      "label": "Patches in throat",
+      "weight": 6
+    },
+    {
+      "id": "S082",
+      "code": "phlegm",
+      "label": "Phlegm",
+      "weight": 5
+    },
+    {
+      "id": "S083",
+      "code": "polyuria",
+      "label": "Polyuria",
+      "weight": 4
+    },
+    {
+      "id": "S084",
+      "code": "prominent_veins_on_calf",
+      "label": "Prominent veins on calf",
+      "weight": 6
+    },
+    {
+      "id": "S085",
+      "code": "puffy_face_and_eyes",
+      "label": "Puffy face and eyes",
+      "weight": 5
+    },
+    {
+      "id": "S086",
+      "code": "pus_filled_pimples",
+      "label": "Pus filled pimples",
+      "weight": 2
+    },
+    {
+      "id": "S087",
+      "code": "receiving_blood_transfusion",
+      "label": "Receiving blood transfusion",
+      "weight": 5
+    },
+    {
+      "id": "S088",
+      "code": "receiving_unsterile_injections",
+      "label": "Receiving unsterile injections",
+      "weight": 2
+    },
+    {
+      "id": "S089",
+      "code": "red_sore_around_nose",
+      "label": "Red sore around nose",
+      "weight": 2
+    },
+    {
+      "id": "S090",
+      "code": "red_spots_over_body",
+      "label": "Red spots over body",
+      "weight": 3
+    },
+    {
+      "id": "S091",
+      "code": "redness_of_eyes",
+      "label": "Redness of eyes",
+      "weight": 5
+    },
+    {
+      "id": "S092",
+      "code": "restlessness",
+      "label": "Restlessness",
+      "weight": 5
+    },
+    {
+      "id": "S093",
+      "code": "runny_nose",
+      "label": "Runny nose",
+      "weight": 5
+    },
+    {
+      "id": "S094",
+      "code": "rusty_sputum",
+      "label": "Rusty sputum",
+      "weight": 4
+    },
+    {
+      "id": "S095",
+      "code": "scurring",
+      "label": "Scurring",
+      "weight": 2
+    },
+    {
+      "id": "S096",
+      "code": "shivering",
+      "label": "Shivering",
+      "weight": 5
+    },
+    {
+      "id": "S097",
+      "code": "silver_like_dusting",
+      "label": "Silver like dusting",
+      "weight": 2
+    },
+    {
+      "id": "S098",
+      "code": "sinus_pressure",
+      "label": "Sinus pressure",
+      "weight": 4
+    },
+    {
+      "id": "S099",
+      "code": "skin_peeling",
+      "label": "Skin peeling",
+      "weight": 3
+    },
+    {
+      "id": "S100",
+      "code": "skin_rash",
+      "label": "Skin rash",
+      "weight": 3
+    },
+    {
+      "id": "S101",
+      "code": "slurred_speech",
+      "label": "Slurred speech",
+      "weight": 4
+    },
+    {
+      "id": "S102",
+      "code": "small_dents_in_nails",
+      "label": "Small dents in nails",
+      "weight": 2
+    },
+    {
+      "id": "S103",
+      "code": "spinning_movements",
+      "label": "Spinning movements",
+      "weight": 6
+    },
+    {
+      "id": "S104",
+      "code": "spotting_urination",
+      "label": "Spotting during urination",
+      "weight": 6
+    },
+    {
+      "id": "S105",
+      "code": "stiff_neck",
+      "label": "Stiff neck",
+      "weight": 4
+    },
+    {
+      "id": "S106",
+      "code": "stomach_bleeding",
+      "label": "Stomach bleeding",
+      "weight": 6
+    },
+    {
+      "id": "S107",
+      "code": "stomach_pain",
+      "label": "Stomach pain",
+      "weight": 5
+    },
+    {
+      "id": "S108",
+      "code": "sunken_eyes",
+      "label": "Sunken eyes",
+      "weight": 3
+    },
+    {
+      "id": "S109",
+      "code": "sweating",
+      "label": "Sweating",
+      "weight": 3
+    },
+    {
+      "id": "S110",
+      "code": "swelled_lymph_nodes",
+      "label": "Swollen lymph nodes",
+      "weight": 6
+    },
+    {
+      "id": "S111",
+      "code": "swelling_joints",
+      "label": "Swelling joints",
+      "weight": 5
+    },
+    {
+      "id": "S112",
+      "code": "swelling_of_stomach",
+      "label": "Swelling of stomach",
+      "weight": 7
+    },
+    {
+      "id": "S113",
+      "code": "swollen_blood_vessels",
+      "label": "Swollen blood vessels",
+      "weight": 5
+    },
+    {
+      "id": "S114",
+      "code": "swollen_extremeties",
+      "label": "Swollen extremities",
+      "weight": 5
+    },
+    {
+      "id": "S115",
+      "code": "swollen_legs",
+      "label": "Swollen legs",
+      "weight": 5
+    },
+    {
+      "id": "S116",
+      "code": "throat_irritation",
+      "label": "Throat irritation",
+      "weight": 4
+    },
+    {
+      "id": "S117",
+      "code": "toxic_look_(typhos)",
+      "label": "Toxic look",
+      "weight": 5
+    },
+    {
+      "id": "S118",
+      "code": "ulcers_on_tongue",
+      "label": "Ulcers on tongue",
+      "weight": 4
+    },
+    {
+      "id": "S119",
+      "code": "unsteadiness",
+      "label": "Unsteadiness",
+      "weight": 4
+    },
+    {
+      "id": "S120",
+      "code": "visual_disturbances",
+      "label": "Visual disturbances",
+      "weight": 3
+    },
+    {
+      "id": "S121",
+      "code": "vomiting",
+      "label": "Vomiting",
+      "weight": 5
+    },
+    {
+      "id": "S122",
+      "code": "watering_from_eyes",
+      "label": "Watering from eyes",
+      "weight": 4
+    },
+    {
+      "id": "S123",
+      "code": "weakness_in_limbs",
+      "label": "Weakness in limbs",
+      "weight": 7
+    },
+    {
+      "id": "S124",
+      "code": "weakness_of_one_body_side",
+      "label": "Weakness of one body side",
+      "weight": 4
+    },
+    {
+      "id": "S125",
+      "code": "weight_gain",
+      "label": "Weight gain",
+      "weight": 3
+    },
+    {
+      "id": "S126",
+      "code": "weight_loss",
+      "label": "Weight loss",
+      "weight": 3
+    },
+    {
+      "id": "S127",
+      "code": "yellow_crust_ooze",
+      "label": "Yellow crust or ooze",
+      "weight": 3
+    },
+    {
+      "id": "S128",
+      "code": "yellow_urine",
+      "label": "Yellow urine",
+      "weight": 4
+    },
+    {
+      "id": "S129",
+      "code": "yellowing_of_eyes",
+      "label": "Yellowing of eyes",
+      "weight": 4
+    },
+    {
+      "id": "S130",
+      "code": "yellowish_skin",
+      "label": "Yellowish skin",
+      "weight": 3
+    }
+  ]
+}
