@@ -28,7 +28,7 @@ const PROFILES = [
     initial: "D",
     color: "#188038",
     description: "Review consultations and sign notes.",
-    ready: false,
+    ready: true,
   },
   {
     id: "front-desk",
@@ -46,6 +46,8 @@ export default function LandingPage() {
   function handleSelect(profile) {
     if (profile.id === "patient") {
       navigate("/patient/login");
+    } else if (profile.id === "doctor") {
+      navigate("/doctor/login");
     }
   }
 

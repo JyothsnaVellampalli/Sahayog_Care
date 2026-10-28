@@ -209,7 +209,8 @@ def register(
 def list_appointments(patient_id: str) -> list[dict]:
     """A patient's booked appointments plus open (not-met) emergency cases.
 
-    The two are merged into one list, most recent first, each tagged with a
+    Pending emergencies lead the list, then appointments, newest first in each
+    group. Each is tagged with a
     ``type`` ("appointment" or "emergency"). Once staff attend to an emergency
     (is_met = true) and create an appointment, it drops out of the emergency
     source, so it is never shown twice.
@@ -265,27 +266,19 @@ def list_appointments(patient_id: str) -> list[dict]:
             }
         )
 
-    # Most recent first across both sources.
-    out.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+    # Pending emergencies always precede scheduled or historical appointments.
+    out.sort(key=lambda r: (r["type"] == "emergency", r.get("created_at") or ""), reverse=True)
     return out
 
 
-def create_appointment(
-    patient_id: str, slot_id: str, reason: str | None, idempotency_key: str
-) -> dict:
-    """Insert an appointment row (BOOKED) for a patient + slot. Idempotent."""
-    client = _require_admin()
-    row = {
-        "patient_id": patient_id,
-        "slot_id": slot_id,
-        "status": "BOOKED",
-        "reason": reason,
-        "idempotency_key": idempotency_key,
-    }
-    res = client.table("appointments").upsert(
-        row, on_conflict="idempotency_key", ignore_duplicates=True
-    ).execute()
-    return (res.data or [row])[0]
+def create_appointment(patient_id, slot_id, reason, idempotency_key,
+                       symptoms=None, severity=None, history=None):
+    """Create the shared visit and reserve its slot atomically."""
+    from app import appointments
+    from app.book_appointment.deidentify import deidentify
+    return appointments.book(_require_admin(), patient_id, slot_id, reason,
+                             idempotency_key, symptoms, severity,
+                             deidentify(history).text if history else None)
 
 
 # --- Emergency intakes (Phase 1.4 follow-up) ---------------------------------

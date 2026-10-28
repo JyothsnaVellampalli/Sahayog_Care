@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # App metadata
     app_name: str = "Sahayog Care"
     environment: str = "development"
+    # App-wide validation switch; never expose other settings through the API.
+    show_speech_transcripts: bool = False
 
     # CORS: origins allowed to call the API (the React dev server by default).
     frontend_origins: list[str] = [
@@ -52,6 +54,27 @@ class Settings(BaseSettings):
     # not text. Uses the same OPENROUTER_API_KEY.
     symptom_classifier_model: str = "typesafe/jev-1.13"
     open_router_classifier_url: str = "https://openrouter.ai/api/alpha/decisions"
+
+    # Object storage (Phase 2.1): signatures + transcripts. S3 when configured,
+    # otherwise a local folder under the backend (dev fallback).
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_region: str = "ap-south-1"
+    s3_bucket: str | None = None
+    s3_prefix: str = ""
+    local_storage_dir: str = "storage"
+
+    # Sarvam is the only speech recognition and speaker separation provider.
+    sarvam_api_key: str | None = None
+    sarvam_stt_model: str = "saaras:v4"
+    sarvam_timeout_seconds: float = 60.0
+    sarvam_max_audio_bytes: int = 100 * 1024 * 1024
+
+    @property
+    def s3_configured(self) -> bool:
+        return bool(
+            self.aws_access_key_id and self.aws_secret_access_key and self.s3_bucket
+        )
 
     # LangSmith tracing (observability/audit — PRD section 7).
     langsmith_tracing: bool = False

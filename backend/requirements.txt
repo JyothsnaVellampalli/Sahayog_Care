@@ -23,6 +23,13 @@ openai==1.59.6
 # HTTP client (also pulled in transitively; pinned for the model adapter).
 httpx==0.28.1
 
+# --- Phase 2.1: doctor portal / consultation scribe ---
+# Object storage for signatures and transcripts (S3; local fallback in dev).
+boto3==1.35.90
+# Required by FastAPI for multipart form / file uploads (signature upload).
+python-multipart==0.0.20
+# Sarvam batch speech recognition uses the existing httpx dependency.
+
 # --- Optional, stronger de-identification ---
 # The de-identification node works out of the box with a built-in regex scrubber.
 # For ML-backed PII detection (PRD section 7 names presidio), additionally install

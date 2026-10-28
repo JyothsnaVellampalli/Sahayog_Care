@@ -1,0 +1,189 @@
+.clist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.clist__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.clist__title {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.clist__count {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-base);
+}
+
+/* Segmented date range control */
+.clist__range {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+}
+
+.clist__seg {
+  border: none;
+  background: none;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+}
+
+.clist__seg--active {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  font-weight: 600;
+}
+
+.clist__date {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 5px 10px;
+  font-size: var(--font-size-base);
+  font-family: inherit;
+}
+
+/* Status filter pills */
+.clist__filters {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.clist__filter {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-base);
+}
+
+.clist__filter--active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary-hover);
+  font-weight: 600;
+}
+
+.clist__error {
+  padding: 10px 12px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+}
+
+.clist__empty {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-subtle);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.clist__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Consultation card */
+.ccard {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  text-align: left;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-neutral);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.ccard:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.ccard__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ccard__time {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.ccard__name {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.ccard__symptoms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.ccard__chip {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.ccard__chip--more {
+  color: var(--color-text-subtle);
+  font-style: italic;
+}
+
+.ccard__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .ccard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ccard__meta {
+    align-self: flex-start;
+  }
+}

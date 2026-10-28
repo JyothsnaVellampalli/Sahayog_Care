@@ -2,7 +2,7 @@
 
 Thin, typed helpers over the Supabase client for the read queries the booking
 graph needs: specialties, doctors by specialty, and open slots. These are plain
-data lookups — no AI (PRD: the slot engine is deterministic).
+data lookups - no AI (PRD: the slot engine is deterministic).
 
 All functions degrade gracefully: if Supabase is not configured they return
 empty lists rather than raising, so the graph can still run and report that no
@@ -12,13 +12,9 @@ options are available.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any
+from datetime import datetime, timezone
 
 from app.config import settings
-
-
-class DatabaseNotConfiguredError(RuntimeError):
-    """Raised when a write/booking op is attempted without Supabase config."""
 
 
 @lru_cache(maxsize=1)
@@ -83,6 +79,7 @@ def open_slots_for_doctors(
         .select("id, doctor_id, starts_at, ends_at")
         .in_("doctor_id", doctor_ids)
         .eq("status", "OPEN")
+        .gt("starts_at", datetime.now(timezone.utc).isoformat())
         .order("starts_at")
         .execute()
     )
@@ -113,40 +110,6 @@ def get_slot(slot_id: str) -> dict | None:
         .execute()
     )
     return (res.data or [None])[0]
-
-
-def book_slot(slot_id: str) -> dict:
-    """Reserve an OPEN slot by transitioning it to BOOKED.
-
-    The update is guarded on ``status = 'OPEN'`` so a slot cannot be
-    double-booked: if two requests race, only the first flips OPEN -> BOOKED and
-    the second updates zero rows.
-
-    Returns {"ok": bool, "slot": <slot or None>, "reason": str | None}.
-    """
-    client = _client()
-    if client is None:
-        raise DatabaseNotConfiguredError(
-            "Supabase is not configured; cannot book a slot."
-        )
-
-    existing = get_slot(slot_id)
-    if existing is None:
-        return {"ok": False, "slot": None, "reason": "Slot not found."}
-    if existing["status"] != "OPEN":
-        return {"ok": False, "slot": existing, "reason": "Slot is no longer available."}
-
-    res = (
-        client.table("slots")
-        .update({"status": "BOOKED"})
-        .eq("id", slot_id)
-        .eq("status", "OPEN")  # guard: only book if still open
-        .execute()
-    )
-    if not res.data:
-        # Someone else booked it between the read and the update.
-        return {"ok": False, "slot": get_slot(slot_id), "reason": "Slot was just taken."}
-    return {"ok": True, "slot": res.data[0], "reason": None}
 
 
 def doctors_with_slots(

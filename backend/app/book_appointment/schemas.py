@@ -126,6 +126,7 @@ class IntakeResponse(BaseModel):
     """
 
     classification: Classification
+    symptoms: list[dict] = Field(default_factory=list)
     deidentified_text: str = ""
     removed_identifiers: dict[str, int] = Field(default_factory=dict)
     model: str | None = None

@@ -48,7 +48,6 @@
 - If phone number is existing, get the details from database.
 - If phone number is not existing in database, ask for patient details - name, age, gender(mandatory), location.
 - For symptoms categorising(Emergency, Critical, Normal) get the age and gender from patient record and remove it from the symptoms form(about you section).
-- Also while suggesting doctors, use the location from patient profile for filtering doctors.
 - Add the list of appointments of patient in the `My appointemnts` tab.
 
 ### Done When
@@ -56,13 +55,61 @@
 - Patient has to see all his previous appointments.
 
 
+[ ] Phase 1.5
+### Goals
+- UI design has to be updated referring to `docs/Design/Doctor Portal - Screens`
+- While suggesting doctors, use the location from patient profile for filtering doctors.
 
-[ ] Phase 2 - Notification handler
+### Done When
+- A new clean UI is visible and the doctors are filtered based on location and shown in UI.
 
-[ ] Phase 2.1
+
+[ ] Phase 1.6
+### Goals
+- Add a language detection and translation node before categorising symptoms.
+- This step should translate all local language text to english.
+
+### Done Whwn
+- Thes symptoms mentioned in mixed language like Hinglish, Tinglish should be identified.
+
+
+[x] Phase 2 - Consultation Scribe
+
+[x] Phase 2.1
+### Goals
+- Add the login for doctor, similar to patient.
+- Add flow for maintaining doctor digital signature. We can use local folder or AWS S3 for doing that.
+- After login, doctor should see his today's appointments as defalut, Check the Doctor Portal section in `docs/UI_Design`.
+- Check `docs/Design/Doctor Portal - Screens` for design and replicate the same design here.
+- Doctor converation transcript can be stored in json format with proper file name identification and store them in s3 or local.
+
+### Done When
+- A doctor should be able to login, upload the digital signature, see his consultations, enter the consultation screen and start consultation and after consultation should see the transcript of his consversation with patient and can edit it.
+
+
+[x] Phase 2.2
+### Goals
+- Fed the consultation transcript to LLM and get SOAP(Subjective, Objective, Assessment, Plan) response.
+- Save SOAP summary.
+- Get doctor approval on SOAP summary(through signature) and close consultation.
+- Add langraph to handle all these stages and langsmith tracing for this graph.
+
+### Done When
+- The SOAP summary should be generated, saved. It should be viewed and allowed to edit by the doctor. After the doctor approval, the consulattaion has to be closed. 
+
+
+
+[ ] Phase 3 - Pharmacist Portal
+### Goals
+- Data for pharmacy store.
+- UI to view, update data on selling.
+
+
+[ ] Phase 4 - Notification engine
 ### Goals
 - Add a new notification sender module.
 - Add handlers to send notification which can be used in multiple other modules for sending notifications.
 
 ### Done When
 - Notifications can be send.
+

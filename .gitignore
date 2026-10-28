@@ -23,3 +23,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local object storage (signatures, transcripts) — dev fallback for S3
+backend/storage/

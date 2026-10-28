@@ -294,6 +294,7 @@ def build_graph():
     graph = StateGraph(IntakeState)
     graph.add_node("validate_input", _validate_input)
     graph.add_node("deidentify", _deidentify)
+    # TODO: Classify node should be able to match specality also(Can work with multi-lingual inputs)
     graph.add_node("classify", _classify)
     graph.add_node("emergency", _emergency)
     graph.add_node("match_specialty", _match_specialty)
@@ -351,6 +352,7 @@ def run_intake(
     specialty = final.get("specialty")
     return IntakeResponse(
         classification=final["classification"],
+        symptoms=final.get("selected_symptoms", selected),
         deidentified_text=final.get("deidentified_text", ""),
         removed_identifiers=final.get("removed_identifiers", {}),
         model=final.get("model"),

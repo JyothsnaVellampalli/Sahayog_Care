@@ -327,6 +327,7 @@ function BookingSection({ result }) {
   const [bookedSlotId, setBookedSlotId] = useState(null);
   const [bookingError, setBookingError] = useState(null);
   const [pendingSlot, setPendingSlot] = useState(null);
+  const [bookingKeys] = useState(() => new Map());
 
   const specialtyName = result.specialty?.name;
   const category = result.classification?.category;
@@ -335,11 +336,16 @@ function BookingSection({ result }) {
   async function handleBook(slotId) {
     setBookingError(null);
     setPendingSlot(slotId);
+    if (!bookingKeys.has(slotId)) bookingKeys.set(slotId, crypto.randomUUID());
     try {
       const res = await bookSlot({
         slotId,
         patientId: patient?.id,
         reason,
+        idempotencyKey: bookingKeys.get(slotId),
+        symptoms: result.symptoms,
+        severity: category,
+        history: result.deidentified_text,
       });
       if (res.ok) {
         setBookedSlotId(slotId);

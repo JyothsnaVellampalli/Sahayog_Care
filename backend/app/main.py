@@ -14,6 +14,8 @@ from pydantic import BaseModel
 
 from app.book_appointment.router import router as book_appointment_router
 from app.config import settings
+from app.doctor.router import router as doctor_router
+from app.consultation.router import router as consultation_router
 from app.patient.router import router as patient_router
 
 app = FastAPI(
@@ -32,6 +34,14 @@ app.add_middleware(
 
 app.include_router(book_appointment_router)
 app.include_router(patient_router)
+app.include_router(doctor_router)
+app.include_router(consultation_router)
+
+
+@app.get("/api/settings", tags=["settings"])
+def public_settings():
+    """Only explicitly public app-level feature flags."""
+    return {"show_speech_transcripts": settings.show_speech_transcripts}
 
 
 class HealthResponse(BaseModel):

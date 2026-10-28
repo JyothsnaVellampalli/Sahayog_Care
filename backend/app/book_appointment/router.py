@@ -12,13 +12,13 @@ shape, so only app.book_appointment.catalogue would change.)
 
 from __future__ import annotations
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+from typing import Literal
+from uuid import UUID
 
-import uuid
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from app.book_appointment.catalogue import load_symptoms
-from app.book_appointment.db import DatabaseNotConfiguredError, book_slot
 from app.book_appointment.graph import run_intake
 from app.book_appointment.schemas import IntakeRequest, IntakeResponse
 from app.patient import service as patient_service
@@ -57,10 +57,13 @@ def appointment_intake(request: IntakeRequest) -> IntakeResponse:
 
 
 class BookSlotRequest(BaseModel):
-    slot_id: str
-    patient_id: str | None = None
-    # Human-readable summary for "My appointments" (e.g. "Cardiology - Severe").
-    reason: str | None = None
+    slot_id: UUID
+    patient_id: UUID
+    idempotency_key: UUID
+    reason: str | None = Field(default=None, max_length=500)
+    symptoms: list[dict] = Field(default_factory=list, max_length=100)
+    severity: Literal["Normal", "Severe", "Need more information"] | None = None
+    history: str | None = Field(default=None, max_length=4000)
 
 
 class BookSlotResponse(BaseModel):
@@ -68,55 +71,20 @@ class BookSlotResponse(BaseModel):
     slot_id: str
     status: str | None = None
     appointment_id: str | None = None
-    reason: str | None = None  # error reason when ok is False
+    reason: str | None = None
 
 
 @router.post("/appointments/book", response_model=BookSlotResponse)
 def book_appointment_slot(request: BookSlotRequest) -> BookSlotResponse:
-    """Reserve a chosen slot and record the appointment (Phase 1.3 + 1.4).
-
-    Transitions the slot OPEN -> BOOKED with a guard so it cannot be
-    double-booked, then (when a patient is provided) creates an appointment row
-    so the booking shows up in "My appointments".
-    """
     try:
-        result = book_slot(request.slot_id)
-    except DatabaseNotConfiguredError as exc:
-        return BookSlotResponse(ok=False, slot_id=request.slot_id, reason=str(exc))
-
-    if not result["ok"]:
-        slot = result.get("slot") or {}
-        return BookSlotResponse(
-            ok=False,
-            slot_id=request.slot_id,
-            status=slot.get("status"),
-            reason=result.get("reason"),
+        appt = patient_service.create_appointment(
+            patient_id=str(request.patient_id), slot_id=str(request.slot_id),
+            reason=request.reason, idempotency_key=str(request.idempotency_key),
+            symptoms=request.symptoms, severity=request.severity, history=request.history,
         )
-
-    appointment_id = None
-    if request.patient_id:
-        try:
-            appt = patient_service.create_appointment(
-                patient_id=request.patient_id,
-                slot_id=request.slot_id,
-                reason=request.reason,
-                idempotency_key=str(uuid.uuid4()),
-            )
-            appointment_id = appt.get("id")
-        except Exception as exc:
-            # The slot is reserved, but recording the appointment failed. Surface
-            # it rather than hiding it, so the patient does not think the booking
-            # fully succeeded when it will not show in "My appointments".
-            return BookSlotResponse(
-                ok=False,
-                slot_id=request.slot_id,
-                status="BOOKED",
-                reason=f"Slot reserved but could not record the appointment: {exc}",
-            )
-
-    return BookSlotResponse(
-        ok=True,
-        slot_id=request.slot_id,
-        status="BOOKED",
-        appointment_id=appointment_id,
-    )
+    except patient_service.PatientServiceUnavailable:
+        raise HTTPException(status_code=503, detail="Booking service unavailable.") from None
+    except Exception:
+        raise HTTPException(status_code=409, detail="Could not book this slot. Refresh availability and retry.") from None
+    return BookSlotResponse(ok=True, slot_id=str(request.slot_id),
+                            status=appt["status"], appointment_id=appt["id"])

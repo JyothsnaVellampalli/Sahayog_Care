@@ -107,6 +107,11 @@ Never commit the real `.env` — only `.env.example` is tracked.
 
 ### Database setup (Supabase / Postgres)
 
+For the shared patient appointment / doctor consultation record, apply the
+Phase 2.2 migration before running the updated app. See
+[Shared appointments](docs/SharedAppointments.md) for migration order, legacy
+data preservation, and manual emergency assignment.
+
 Run the SQL in `backend/database/` against your Supabase project (SQL Editor or
 `python backend/scripts/apply_migration.py <file.sql>`):
 
