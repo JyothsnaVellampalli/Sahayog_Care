@@ -69,6 +69,15 @@ export default function BookAppointment() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [submitError, setSubmitError] = useState(null);
+  const locationVersion = useRef(0);
+  useEffect(() => {
+    function resetSuggestions() {
+      locationVersion.current += 1;
+      setResult(null); setActiveTab("symptoms");
+    }
+    window.addEventListener("patient-location-changed", resetSuggestions);
+    return () => window.removeEventListener("patient-location-changed", resetSuggestions);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -121,6 +130,7 @@ export default function BookAppointment() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    const requestedLocationVersion = locationVersion.current;
     setSubmitError(null);
     setResult(null);
     setSubmitting(true);
@@ -140,6 +150,7 @@ export default function BookAppointment() {
         // Age and gender come from the patient profile (Phase 1.4), not the form.
       };
       const data = await submitIntake(payload);
+      if (requestedLocationVersion !== locationVersion.current && data.outcome !== "emergency") return;
       setResult(data);
       setActiveTab("slots");
     } catch (err) {
@@ -294,11 +305,12 @@ function IntakeResult({ result }) {
       {/* Emergency: show the handled-later message, no booking. */}
       {result.outcome === "emergency" && (
         <p className="ba__emergency" role="alert">
-          Online slot booking is unavailable for these symptoms. Please seek urgent medical care.
+          It looks like an emergency. Our team will contact you immediately to help you get care.
         </p>
       )}
 
       {/* Non-emergency: specialty + doctor/slot selection. */}
+      {result.outcome === "emergency" && result.specialty?.name && <p>Suggested specialty: <strong>{result.specialty.name}</strong></p>}
       {result.outcome === "booking" && <BookingSection result={result} />}
 
       {result.note && <p className="ba__note">{result.note}</p>}

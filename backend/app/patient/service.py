@@ -262,7 +262,7 @@ def list_appointments(patient_id: str) -> list[dict]:
                 "created_at": e.get("created_at"),
                 "starts_at": None,
                 "doctor_name": None,
-                "specialty": None,
+                "specialty": (e.get("specialty") or {}).get("name"),
             }
         )
 
@@ -312,6 +312,7 @@ def create_emergency_intake(
     symptoms: list[dict],
     deidentified_text: str,
     scores: dict,
+    specialty: dict | None = None,
 ) -> dict | None:
     """Record an emergency case. Returns the row, or None if DB is unavailable.
 
@@ -327,6 +328,7 @@ def create_emergency_intake(
         "deidentified_text": deidentified_text or "",
         "category": "Emergency",
         "scores": scores or {},
+        "specialty": specialty,
     }
     res = client.table("emergency_intakes").insert(row).execute()
     return (res.data or [None])[0]
@@ -339,7 +341,7 @@ def list_open_emergencies(patient_id: str) -> list[dict]:
         return []
     res = (
         client.table("emergency_intakes")
-        .select("id, symptoms, deidentified_text, category, is_met, created_at")
+        .select("id, symptoms, deidentified_text, category, is_met, created_at, specialty")
         .eq("patient_id", patient_id)
         .eq("is_met", False)
         .order("created_at", desc=True)

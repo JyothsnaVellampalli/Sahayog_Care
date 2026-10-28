@@ -6,7 +6,8 @@ live database is needed.
 
 import app.book_appointment.graph as graph_mod
 from app.book_appointment.graph import run_intake
-from app.book_appointment.model_adapter import DecisionResponse, OpenRouterAdapter
+from app.book_appointment.model_adapter import DecisionResponse, ModelCallError, OpenRouterAdapter
+import pytest
 from app.book_appointment.schemas import IntakeRequest, Severity, SymptomDetail
 
 # Shared fake data for the specialty / doctor lookups.
@@ -42,6 +43,18 @@ class StubJev(OpenRouterAdapter):
     @property
     def classifier_model(self) -> str:
         return self._classifier_model
+
+    def classify_json(self, system_prompt, user_payload):
+        raise AssertionError("Intake must never call a chat/translation model")
+
+    def decisions(self, state, questions):
+        self.calls = getattr(self, "calls", 0) + 1
+        self.questions = questions
+        self.last_state = state
+        return {"answers": {
+            "triage_category": {"choice": self._triage, "probabilities": self._triage_scores, "confidence": 0.9},
+            "doctor_specialty": {"choice": self._specialty, "probabilities": {self._specialty: 1.0}},
+        }}
 
     def choice_decision(self, state, question_name, instructions, criteria):
         self.last_state = state
@@ -110,7 +123,9 @@ def test_emergency_ends_without_booking(monkeypatch):
     assert resp.outcome == "emergency"
     assert resp.emergency_message
     assert resp.doctors == []
-    assert resp.specialty is None
+    assert resp.specialty.name == "Cardiology"
+    assert stub.calls == 1
+    assert set(stub.questions) == {"triage_category", "doctor_specialty"}
 
 
 # --- Phase 1.3: non-emergency booking branch ----------------------------------
@@ -137,3 +152,65 @@ def test_severe_adds_earliest_slot_guidance(monkeypatch):
     assert resp.severe_guidance is not None
     assert "earliest" in resp.severe_guidance.lower()
     assert len(resp.doctors) == 1
+
+
+@pytest.mark.parametrize("text", [
+    "mujhe bukhar hai, cough nahi hai",
+    "naaku jwaram undi, cough ledu",
+    "\u092e\u0941\u091d\u0947 \u092c\u0941\u0916\u093e\u0930 \u0939\u0948",
+    "mild cough",
+])
+def test_original_language_reaches_single_decision(monkeypatch, text):
+    _patch_db(monkeypatch)
+    stub = StubJev("Severe", {"Severe": 1})
+    result = run_intake(IntakeRequest(free_text=text), adapter=stub)
+    assert text in stub.last_state
+    assert result.deidentified_text == text
+    assert stub.calls == 1
+    assert set(stub.questions) == {"triage_category", "doctor_specialty"}
+
+
+def test_decision_failure_has_no_translation_fallback(monkeypatch):
+    _patch_db(monkeypatch)
+    stub = StubJev("Normal", {"Normal": 1})
+    def fail(*args):
+        raise ModelCallError("offline")
+    monkeypatch.setattr(stub, "decisions", fail)
+    result = run_intake(IntakeRequest(free_text="bukhar"), adapter=stub)
+    assert result.outcome == "unavailable"
+
+
+def test_symptom_only_intake_uses_one_decision(monkeypatch):
+    _patch_db(monkeypatch)
+    stub = StubJev("Normal", {"Normal": 1})
+    result = run_intake(IntakeRequest(symptoms=[SymptomDetail(symptom_id="S027")]), adapter=stub)
+    assert result.outcome == "booking"
+    assert stub.calls == 1
+
+
+def test_emergency_specialty_persisted_and_failure_visible(monkeypatch):
+    from app.patient import service
+    _patch_db(monkeypatch)
+    monkeypatch.setattr(service, "get_patient_by_id", lambda _: {})
+    saved = []
+    monkeypatch.setattr(service, "create_emergency_intake", lambda **kw: saved.append(kw) or {"id": "emergency"})
+    stub = StubJev("Emergency", {"Emergency": 1})
+    request = IntakeRequest(patient_id="patient", free_text="chest pain")
+    result = run_intake(request, adapter=stub)
+    assert saved[0]["specialty"]["name"] == "Cardiology"
+    assert result.outcome == "emergency"
+    monkeypatch.setattr(service, "create_emergency_intake", lambda **kw: None)
+    result = run_intake(request, adapter=stub)
+    assert result.outcome == "emergency"
+    assert "could not be saved" in result.note
+
+
+def test_missing_specialty_preserves_emergency(monkeypatch):
+    _patch_db(monkeypatch)
+    stub = StubJev("Emergency", {"Emergency": 1})
+    monkeypatch.setattr(stub, "decisions", lambda *args: {"answers": {
+        "triage_category": {"probabilities": {"Emergency": 1}}}})
+    result = run_intake(IntakeRequest(free_text="chest pain"), adapter=stub)
+    assert result.outcome == "emergency"
+    assert result.specialty is None
+    assert result.note

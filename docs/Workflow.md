@@ -64,15 +64,17 @@
 - A new clean UI is visible and the doctors are filtered based on location and shown in UI.
 
 
-[ ] Phase 1.6
+[x] Phase 1.6
 ### Goals
-- Add a language detection and translation node before categorising symptoms.
-- This step should translate all local language text to english.
+- Interpret multilingual symptoms directly in the combined Jev classification call (updated: no separate translation model call).
+- Return severity and specialty decisions from the original de-identified text; translated text does not need to be generated or stored.
 - The existing workflow has different stages for severity and specality categorising, club them to one Jev model call. So for even emergency cases, the specality is already stored in database and can show in UI.
+- Add profile UI for patient portal. On clicking the profile icon on the top-right corner, show a popup with all patient details stored where patient can edit few editable fields like location, name.
 
 ### Done Whwn
 - Thes symptoms mentioned in mixed language like Hinglish, Tinglish should be identified.
 - For emergency cases also, the specality should be shown in UI.
+- A patient can see the profile popup on clicking the profile icon in the top-right corner, where the editable patient details can be edited.
 
 
 [x] Phase 2 - Consultation Scribe

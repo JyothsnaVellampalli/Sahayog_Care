@@ -1,14 +1,5 @@
-"""LangGraph booking-intake flow.
-
-Nodes (in order):
-  1. validate_input   - validate selected symptom IDs against the catalogue.
-  2. deidentify       - remove direct identifiers from the free text. This node
-                        runs BEFORE any external model call (PRD section 6/7).
-  3. classify         - call the OpenRouter classifier on the selected symptoms
-                        plus the de-identified text; categorise the condition.
-
-The graph is intentionally small for Phase 1.2. Later phases extend it with the
-emergency hand-off, specialty match, slot search and booking nodes.
+"""Booking intake: validate, de-identify, and jointly assess urgency
+and specialty before emergency persistence or location-filtered doctor search.
 """
 
 from __future__ import annotations
@@ -20,7 +11,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.book_appointment.catalogue import label_for, valid_symptom_ids
-from app.book_appointment.classifier import ClassifierError, classify, match_specialty
+from app.book_appointment.classifier import ClassifierError, classify_intake
 from app.book_appointment.db import doctors_with_slots, list_specialties
 from app.book_appointment.deidentify import deidentify
 from app.book_appointment.model_adapter import OpenRouterAdapter, get_adapter
@@ -148,33 +139,20 @@ def _deidentify(state: IntakeState) -> dict[str, Any]:
 
 
 def _classify(state: IntakeState) -> dict[str, Any]:
-    """Run the classifier on selected symptoms + de-identified text."""
-    request = state["request"]
-    # Adapter comes from the context var (not state), so it is not traced.
     adapter = _current_adapter()
     try:
-        classification = classify(
-            request=request,
-            deidentified_text=state.get("deidentified_text", ""),
-            adapter=adapter,
-        )
-        return {
-            "classification": classification,
-            "model": adapter.classifier_model,
-            "note": None,
-        }
+        try:
+            specialties = list_specialties()
+        except Exception:
+            specialties = []
+        classification, specialty = classify_intake(
+            state["request"], state.get("deidentified_text", ""), specialties, adapter)
+        return {"classification": classification, "specialty": specialty,
+                "model": adapter.classifier_model,
+                "note": None if specialty else "Specialty matching is unavailable. Please retry."}
     except ClassifierError as exc:
-        # Surface an UNAVAILABLE result rather than crashing the request; the
-        # note explains why (e.g. no API key configured, or the call failed).
-        return {
-            "classification": Classification(
-                status="UNAVAILABLE",
-                category=None,
-            ),
-            "model": None,
-            "note": str(exc),
-            "outcome": "unavailable",
-        }
+        return {"classification": Classification(status="UNAVAILABLE", category=None),
+                "model": None, "note": str(exc), "outcome": "unavailable"}
 
 
 def _route_after_classify(state: IntakeState) -> str:
@@ -189,7 +167,7 @@ def _route_after_classify(state: IntakeState) -> str:
         return "emergency"
     if classification and classification.status != "OK":
         return END
-    return "match_specialty"
+    return "find_doctors"
 
 
 def _emergency(state: IntakeState) -> dict[str, Any]:
@@ -207,51 +185,20 @@ def _emergency(state: IntakeState) -> dict[str, Any]:
             from app.patient.service import create_emergency_intake
 
             classification = state.get("classification")
-            create_emergency_intake(
+            saved = create_emergency_intake(
                 patient_id=request.patient_id,
                 symptoms=state.get("selected_symptoms", []),
                 deidentified_text=state.get("deidentified_text", ""),
                 scores=(classification.scores if classification else {}),
+                specialty=state.get("specialty"),
             )
+            if saved is None:
+                raise RuntimeError("Emergency was not saved")
         except Exception:
-            # Recording failure must not break the patient's emergency guidance.
-            pass
+            return {"outcome": "emergency", "emergency_message": EMERGENCY_MESSAGE,
+                    "note": "Your emergency could not be saved. Please contact the care team directly."}
 
     return {"outcome": "emergency", "emergency_message": EMERGENCY_MESSAGE}
-
-
-def _match_specialty(state: IntakeState) -> dict[str, Any]:
-    """Pick the doctor specialty for a non-emergency case (Jev scores)."""
-    request = state["request"]
-    adapter = _current_adapter()
-    specialties = list_specialties()
-    if not specialties:
-        return {
-            "outcome": "unavailable",
-            "note": "No specialties available in the database.",
-            "specialty": None,
-        }
-    try:
-        result = match_specialty(
-            request=request,
-            deidentified_text=state.get("deidentified_text", ""),
-            specialties=specialties,
-            adapter=adapter,
-        )
-    except ClassifierError as exc:
-        return {"outcome": "unavailable", "note": str(exc), "specialty": None}
-
-    matched = result.get("specialty")
-    specialty_out = None
-    if matched:
-        specialty_out = {
-            "id": matched.get("id"),
-            "code": matched.get("code"),
-            "name": matched.get("name"),
-            "scores": result.get("scores", {}),
-            "confidence": result.get("confidence"),
-        }
-    return {"specialty": specialty_out}
 
 
 def _find_doctors(state: IntakeState) -> dict[str, Any]:
@@ -303,15 +250,13 @@ def build_graph():
     Flow: validate_input -> deidentify -> classify -> (conditional)
       - Emergency  -> emergency (log) -> END
       - UNAVAILABLE -> END
-      - otherwise  -> match_specialty -> find_doctors -> END
+      - otherwise  -> find_doctors -> END
     """
     graph = StateGraph(IntakeState)
     graph.add_node("validate_input", _validate_input)
     graph.add_node("deidentify", _deidentify)
-    # TODO: Classify node should be able to match specality also(Can work with multi-lingual inputs)
     graph.add_node("classify", _classify)
     graph.add_node("emergency", _emergency)
-    graph.add_node("match_specialty", _match_specialty)
     graph.add_node("find_doctors", _find_doctors)
 
     graph.add_edge(START, "validate_input")
@@ -322,12 +267,11 @@ def build_graph():
         _route_after_classify,
         {
             "emergency": "emergency",
-            "match_specialty": "match_specialty",
+            "find_doctors": "find_doctors",
             END: END,
         },
     )
     graph.add_edge("emergency", END)
-    graph.add_edge("match_specialty", "find_doctors")
     graph.add_edge("find_doctors", END)
     return graph.compile()
 
@@ -359,7 +303,14 @@ def run_intake(
     # traced state), then run the graph.
     token = _ADAPTER_CTX.set(adapter)
     try:
-        final: IntakeState = _GRAPH.invoke({"request": request}, config=config)
+        # Remove identifiers before any traced graph state is created.
+        cleaned = deidentify(request.free_text)
+        safe_request = request.model_copy(deep=True)
+        safe_request.free_text = cleaned.text
+        final: IntakeState = _GRAPH.invoke({"request": safe_request}, config=config)
+        for key, count in cleaned.removed.items():
+            removed = final.setdefault("removed_identifiers", {})
+            removed[key] = removed.get(key, 0) + count
     finally:
         _ADAPTER_CTX.reset(token)
 

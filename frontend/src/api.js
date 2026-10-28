@@ -80,6 +80,20 @@ export function fetchAppointments(patientId) {
   return request(`/api/patients/${patientId}/appointments`);
 }
 
+export function fetchPatientProfile(patientId, token) {
+  return request(`/api/patients/${encodeURIComponent(patientId)}/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function savePatientProfile(patientId, token, payload) {
+  return request(`/api/patients/${encodeURIComponent(patientId)}/profile`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+}
+
 // --- Doctor (Phase 2.1) ---
 
 const API_BASE_URL_DOCTOR = API_BASE_URL;

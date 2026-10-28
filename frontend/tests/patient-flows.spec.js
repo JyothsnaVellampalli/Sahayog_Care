@@ -1,6 +1,35 @@
 ﻿import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+test('profile popup loads, saves and restores focus', async ({ page }) => {
+  await fixtures(page);
+  let profile = { id: 'patient', full_name: 'Test Patient', city: 'Pune', phone: '9999999999', email: 'test@example.com', age: 35, gender: 'female', role: 'patient' };
+  await page.route('**/api/patients/patient/profile', async route => {
+    expect(route.request().headers().authorization).toBe('Bearer test-token');
+    if (route.request().method() === 'PATCH') profile = { ...profile, ...route.request().postDataJSON() };
+    await route.fulfill({ json: profile });
+  });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/patient/book-appointment');
+  const trigger = page.getByRole('button', { name: /View and edit your profile/ });
+  await trigger.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('test@example.com')).toBeVisible();
+  await dialog.getByLabel('Full name').fill('Updated Patient');
+  await dialog.getByLabel('Location').selectOption('Hyderabad');
+  await accessible(page);
+  await page.screenshot({ path: 'test-results/profile-mobile.png', fullPage: true });
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toContainText('Updated Patient');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sahayog.patient.session')));
+  expect(saved.profile.city).toBe('Hyderabad');
+  await trigger.click();
+  await expect(page.getByLabel('Full name')).toHaveValue('Updated Patient');
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+});
+
 const symptoms = [{ id: 'S027', label: 'Cough' }, { id: 'S019', label: 'Chest pain' }];
 const future = '2099-10-28T10:00:00Z';
 const booked = { id: 'visit', type: 'appointment', status: 'BOOKED', starts_at: future, doctor_name: 'Dr. Test', reason: 'General Medicine', symptoms: [{ id: 'S027', label: 'Cough', severity: 'mild', duration_days: 2 }], history: 'Cough for two days' };

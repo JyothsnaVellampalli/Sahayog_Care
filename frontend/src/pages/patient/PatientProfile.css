@@ -1,0 +1,12 @@
+.patient-profile { width: min(460px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; border: 1px solid #dce5e2; border-radius: 18px; padding: 24px; color: #203c35; box-shadow: 0 20px 80px #12352d33; }
+.patient-profile::backdrop { background: #152e2855; }
+.patient-profile__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.patient-profile h2 { margin: 0 0 20px; }
+.patient-profile label { display: grid; gap: 6px; margin-bottom: 16px; font-weight: 600; }
+.patient-profile input, .patient-profile select { width: 100%; padding: 10px; border: 1px solid #acbfb8; border-radius: 8px; font: inherit; }
+.patient-profile dl > div { display: grid; grid-template-columns: 100px 1fr; gap: 12px; margin: 12px 0; }
+.patient-profile dd { margin: 0; overflow-wrap: anywhere; }
+.patient-profile dt, .patient-profile__hint { color: #5b7068; }
+.patient-profile button { padding: 9px 16px; border: 1px solid #acbfb8; border-radius: 8px; cursor: pointer; }
+.patient-profile button[type=submit] { background: #216c57; color: white; }
+.portal__profile-button { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; cursor: pointer; color: inherit; font: inherit; }

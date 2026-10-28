@@ -1,253 +1,314 @@
-# Phase 2 — Doctor portal — Progress
+# Phase 2 - Consultation Scribe - Progress
 
-## Current decisions and implementation — 2026-10-27
+## Phase 2.1 - Doctor portal, signature and consultation foundation
 
-This section supersedes the historical implementation notes below, especially
-references to Whisper, plain/roles modes, local diarization and a SOAP placeholder.
+Status: Complete (per docs/Workflow.md).
 
-### Speech capture and speaker separation
+### Delivered
 
-- Sarvam is now the only speech-to-text provider. Removed browser
-  SpeechRecognition, faster-whisper, PyAV/numpy speech dependencies and the local
-  two-speaker heuristic. MediaRecorder captures audio but does no recognition.
-- Record -> Stop -> Sarvam batch upload -> status polling -> saved editable
-  transcript. Batch processing is required for speaker diarization; this is not
-  live partial-text streaming.
-- Saaras v4 uses codemix, automatic language detection, timestamps and automatic
-  speaker count. Hindi/English and Telugu/English speech stays in its original
-  scripts in the UI. The user confirmed multilingual transcription and speaker
-  differentiation are working satisfactorily.
-- Neutral Person 1, Person 2, Person 3 labels are scoped to each recording.
-  Doctor/patient role inference is explicitly deferred. No voice identity is
-  assumed across recordings. Historical transcripts remain readable.
-- Upload retries retain audio in the current tab; uploaded job identity supports
-  polling after refresh. Backend job metadata prevents duplicate appends for a
-  completed recording. Audio is sent to Sarvam and not persisted locally by the
-  application; consent text reflects this cloud processing decision.
-- SARVAM_API_KEY remains server-side. Optional model, timeout and upload size
-  settings are documented in backend/.env.example. Existing signature, consent,
-  manual notes and transcript editing remain available.
+- Doctor sign-in uses a pre-seeded phone number and returns a doctor profile.
+  This remains development-stage identification: no password, OTP, Supabase Auth
+  user or session token. Patient login still uses phone and password. Production
+  doctor authentication and endpoint authorization remain outstanding.
+- Doctors upload a PNG/JPG signature smaller than 500 KB. The signature gate
+  requires an uploaded signature before consultation screens can be opened.
+- The portal opens today's consultations, with Today / This week / Custom date
+  ranges and All / Scheduled / In progress / Completed status filters.
+- Consultation screens show patient details, symptoms/history, consent and
+  recording controls. Transcripts are stored as JSON and can be edited when
+  transcript display is enabled. Phase 2.2 below documents the current provider,
+  shared appointment lifecycle and transcript-display setting.
+- Shared teal design tokens, responsive portal navigation, signature preview,
+  recording animation and audio-level metering were added. Patient styling and
+  city-based doctor filtering were completed in [Phase 1.5](Phase1.md#phase-15---patient-ui-and-local-doctor-suggestions).
+- Storage uses the shared JSON/byte interface in app/storage.py: configured S3
+  or the local backend/storage fallback. Active storage depends on environment
+  configuration; the original local-only rollout is not a current restriction.
 
-### English translation and SOAP via LangGraph
+### Foundation migrations and implementation history
 
-- UI follow-up: stopping recording now automatically continues through saved
-  transcription, English translation and SOAP generation. Removed the normal
-  Generate/Regenerate SOAP button; a Retry summary action appears only on failure.
-  Saved transcript edits also refresh the summary automatically, and opening a
-  saved transcript prepares its transient summary.
-- SOAP uses one shared section with four full-width rows and bold titles.
-  Edit summary enables all four rows; Apply edits updates the displayed draft
-  and Cancel retains the previous draft. These edits are page-local, unsigned,
-  and replaced by a new transcript version; durable clinical-note saving remains
-  outside this change. Recording and transcript edits are disabled during summary
-  editing to avoid overwriting changes in progress.
+- phase_2_1.sql added doctor phone/email/auth linkage and signature fields, and
+  originally introduced a separate consultations table. Phase 2.2 replaces that
+  active table with appointments and retains a legacy archive; do not backfill
+  separate consultation rows when reading lists.
+- phase_2_1_doctor_phones.sql seeded unique doctor phone numbers (scheme
+  +9190000000NN). phase_2_1_severity_values.sql standardized Emergency / Severe /
+  Normal in place of High / Moderate / Low.
+- The original local faster-whisper engine, PyAV 13.1.0 compatibility pin,
+  numpy two-speaker heuristic and plain/roles transcript modes were replaced by
+  Sarvam in Phase 2.2. They are historical implementation details, not setup
+  requirements. Doctor/patient speaker-role inference is no longer performed.
+- DoctorAuth, DoctorLogin, DoctorPortal, SignatureGate, ConsultationsList,
+  ConsultationView, useAudioRecorder and consultationMeta provide the frontend
+  foundation. app/doctor now owns identity/signatures; app/consultation owns
+  the clinical workflow, while existing /api/doctors URLs remain compatible.
 
-- Added app/doctor/soap_graph.py and translation_prompt.txt. Generate SOAP now
-  executes validate_input -> deidentify -> translate_to_english -> generate_soap
-  -> validate_soap through a compiled LangGraph, matching the booking workflow's
-  orchestration and invocation-local context pattern.
-- Translation is a dedicated LLM call through the existing OpenRouter adapter,
-  followed by a separate SOAP call. Both use the existing OPENROUTER_MODEL and
-  API key; no additional translation credentials or dependencies are required.
-- Translation preserves turn IDs/order, neutral speaker distinctions and
-  recording boundaries. The prompt preserves negations, questions, uncertainty,
-  numbers, units and medications. Invalid/missing/reordered turns fail before
-  SOAP. Original transcript storage/UI is unchanged; English text is transient.
-- De-identification runs before translation and again on translated text. The
-  existing regex/optional Presidio limitations still apply to multilingual PII.
-- SOAP selects concise English excerpts into Subjective, Objective, Assessment
-  and Plan. Strict schema checks and per-turn excerpt checks reject unsupported
-  output. Checks ground SOAP in the English translation, not its semantic
-  equivalence to the original; translation fidelity still needs human review.
-- No doctor/patient roles, unstated diagnoses or treatments are inferred.
-  Missing sections remain empty. Drafts are unsigned, not persisted, and cleared
-  after transcript changes. The button reports translation and generation work.
+### Verification recorded for the foundation
 
-### LangSmith observability
+- Initial backend suite: 11 passing tests. Live walkthrough covered phone
+  identification, signature status, date-filtered lists, consultation details,
+  and transcript append/edit/read using local storage. Frontend build passed.
+- Historical local speech checks used a synthetic two-voice recording and a
+  two-tone clustering test. These do not validate the current Sarvam provider.
+- A synthetic IN_PROGRESS consultation (a7800605-...) and test doctor
+  (+919500000001) were recorded as cleanup items; their current presence has not
+  been rechecked. Any surviving old visit is subject to the migration below.
 
-- Reuses book_appointment/tracing.py initialization and base run configuration,
-  including the existing LangSmith project, endpoint and credentials.
-- Run name/workflow: doctor_consultation_soap; tags: doctor, translation, soap;
-  a fresh run UUID identifies each execution. Each graph node produces a span.
-- Trace state contains stage status and counts only. Raw transcripts, translated
-  turns, drafts and adapters stay outside graph state/config in an isolated
-  ContextVar. Provider error bodies are suppressed at the model boundary.
-- Tracing remains optional via existing LANGSMITH settings. No graph checkpoints
-  or automatic model retries are introduced. Two sequential model calls add
-  latency and cost; each uses the shared adapter timeout.
+## Phase 2.2 - Saved SOAP, doctor approval and consultation completion
 
-### Verification and remaining work
+Status: Complete (per docs/Workflow.md); live validation limitations are below.
 
-- Sarvam accepted the configured key and v4 job parameters in the previous
-  connectivity check; the user subsequently confirmed speech/voice behavior.
-- Added mocked Sarvam contract tests and SOAP graph tests for translation order,
-  original-text preservation, incomplete translations, neutral speakers,
-  trace-safe state and existing SOAP validation behavior.
-- Frontend production build verified after the SOAP button update.
-- Backend tests could not run on this workstation: the Python launcher reports
-  no installed Python and the existing venv targets a missing installation.
-  Run the documented pytest checks after restoring Python and dependencies.
-- A real translated SOAP generation and LangSmith trace inspection remain to be
-  verified in the running environment. No real consultation was sent in testing.
-- Existing dev-stage doctor authentication, S3 activation, location filtering
-  and patient theme work below remain separate outstanding items.
+### Done When - checklist
 
-See docs/DoctorSpeechAndSOAP.md for configuration and the current end-to-end flow.
+- [x] Generate English SOAP from the saved consultation transcript using the LLM.
+- [x] Persist the summary and allow reviewed edits to be saved.
+- [x] Sign and close the consultation after doctor review.
+- [x] Use LangGraph for translation/SOAP stages with LangSmith tracing.
 
-## Historical Phase 2.1 foundation (superseded speech/SOAP details)
+Opening a consultation reads its saved summary. Generation/regeneration is
+explicit, and Apply edits persists the draft. Earlier progress notes describing
+automatic generation, page-local-only edits and an unfinished SOAP placeholder
+are superseded by the implementation below.
 
-Status: Complete (pending user confirmation)
+### Shared appointments and consultations
 
-### Done When (from docs/Workflow.md) — checklist
+`appointments` is the active visit record for both portals. The patient's
+appointment ID is also the doctor's consultation ID. `BOOKED` is displayed as
+`SCHEDULED` in the doctor API; starting the consultation writes `IN_PROGRESS`
+to the same appointment. Patient demographics come from `patients`, and doctor
+assignment and time come from `slots`. Symptoms, severity, history, consent,
+and consultation timestamps live on the appointment.
 
-- [x] Doctor can sign in with their phone number alone (role `doctor`). Every
-      doctor is pre-seeded with a unique phone number; no password or OTP.
-- [x] Digital signature is required before opening a consultation. A doctor
-      uploads a PNG/JPG (< 500 KB); it is stored via the storage service and a
-      signature gate blocks the consultation screens until one is on file.
-- [x] Doctor home shows the day's consultations, with Today / This week / Custom
-      date ranges and status filters (All / Scheduled / In progress / Completed).
-- [x] Consultation view shows collapsible patient details (symptoms, history,
-      allergies, vitals), a recording consent checkbox, and a listening
-      animation while capturing audio.
-- [x] Audio is transcribed with a local, swappable speech-to-text engine
-      (faster-whisper). The transcript is editable and appendable, and is stored
-      as JSON via the storage service.
-- [x] Global styles live in a single tokens file and are reused across portals.
+Previously, reading the doctor list inserted separate `consultations` rows,
+copied only the reason-derived severity, and allowed the two statuses to drift.
+The list now performs reads only, with doctor and date filters in the database.
 
-### Authentication note (dev-stage compromise)
+#### Database rollout
 
-Per the agreed scope, the only compromise for now is **auth verification**.
+Stop the old backend, back up the database, and run
+`backend/database/phase_2_2_unified_appointments.sql` once, after the existing
+Phase 1.4 and Phase 2.1 migrations. Start the updated backend and frontend
+together after the migration succeeds. From the repository root:
 
-Doctors are identified by **phone number alone** — no password, no OTP, and no
-Supabase Auth user. Each doctor row is pre-seeded with a unique phone number
-(migration `backend/database/phase_2_1_doctor_phones.sql`, scheme
-`+9190000000NN`); signing in is a lookup by phone that returns the doctor
-profile. The sign-in response carries no session token.
+```powershell
+backend/.venv/Scripts/python.exe backend/scripts/apply_migration.py backend/database/phase_2_2_unified_appointments.sql
+```
 
-(The patient portal still uses phone + password; only the doctor portal was
-simplified to phone-only on request.) This is a deliberate dev-stage shortcut —
-a real deployment would add proper verification (OTP or SSO) and server-side
-authorization on the doctor endpoints.
+The migration copies clinical fields and visit state onto appointments and
+renames the old table to `consultations_legacy_archive` for recovery/audit.
+No active application query reads or writes the archive. It deliberately aborts
+the entire transaction if historical consultation rows are duplicated, orphaned,
+or disagree with their appointment's patient/slot/doctor; reconcile those records
+before rerunning. It must not guess which clinical record is authoritative.
+Old symptom details that were never stored cannot be reconstructed by migration.
 
-### What was built
+`legacy_consultation_id` preserves old links and the storage namespace for
+existing transcript, SOAP, and transcription-job JSON. New visits use their
+appointment ID for those objects. No S3 objects need moving.
 
-#### Database (`backend/database/phase_2_1.sql`, applied)
+#### Booking
 
-- `doctors` gained: `phone` (unique), `email`, `auth_user_id`, `signature_key`,
-  `signature_uploaded_at`.
-- New `consultations` table: `id`, `appointment_id`, `doctor_id`, `patient_id`,
-  `slot_id`, `status` (SCHEDULED / IN_PROGRESS / COMPLETED / CANCELLED),
-  `severity`, `symptoms` (jsonb), `history`, `allergies`, `vitals`,
-  `consent_recorded`, `transcript_key`, `started_at`, `completed_at`, timestamps,
-  plus supporting indexes.
+The intake graph returns its selected symptom details alongside the existing
+classification and de-identified text. The frontend submits those fields with
+the selected slot, patient, and a UUID idempotency key. Repeated attempts for
+the same selection reuse that key. Booking now requires a patient.
 
-#### Backend
+The `book_appointment` database function locks the slot, inserts the appointment,
+and marks the slot booked in one transaction. An insertion failure cannot leave
+a newly reserved slot without an appointment. Retries return the same record;
+competing bookings cannot claim the same slot. Past slots are excluded from
+suggestions and rejected at booking. The RPC is callable by the server's
+service role only.
 
-- `app/storage.py` — unified storage interface (`put_bytes` / `get_bytes` /
-  `delete` / `put_json` / `get_json`). Uses S3 (boto3) when AWS env vars are
-  configured, otherwise a local filesystem fallback at `backend/storage/`.
-- `app/doctor/service.py` — doctor `identify` (phone-only lookup returning the
-  profile; no password/token), `save_signature`
-  (validates type + size), `has_signature`, `backfill_consultations_for_doctor`
-  (derives consultation rows from booked appointments), `list_consultations`
-  (date range + status filters), `get_consultation` (full detail),
-  `start_consultation` (requires consent, moves to IN_PROGRESS).
-- `app/doctor/transcription.py` — `TranscriptionEngine` protocol +
-  `FasterWhisperEngine` (lazy-loaded, degrades gracefully if the model/ffmpeg is
-  missing). The engine decodes the audio once and returns timed segments plus
-  the waveform. Two transcript modes (``settings.transcript_mode``):
-  - **`plain`** (v2, default) — the recognized speech is folded into one
-    continuous, punctuated text block (no speaker roles). A single-speaker
-    recording stays a single block instead of being split into fake turns.
-  - **`roles`** (v1) — automatic Doctor/Patient diarization, one segment per
-    detected turn. Switch back with `TRANSCRIPT_MODE=roles`.
-  Transcript storage (load / save / append / edit, marking edited segments) is
-  shared by both modes. A segment's `speaker` is `null` in plain mode.
-- `app/doctor/diarization.py` — lightweight **local** 2-speaker diarizer used by
-  the `roles` mode (numpy only; no pyannote / PyTorch / gated models, per the
-  data-residency constraint). Builds a compact spectral fingerprint per segment
-  (log-energy mel-ish bands + spectral centroid), clusters into two speakers
-  with a tiny k-means, and maps the earliest-speaking cluster to "Doctor".
-  Best-effort, not biometric — every line stays editable.
-- `app/doctor/router.py` — `/api/doctors` endpoints: `lookup`, `identify`
-  (phone-only sign-in), signature `GET`/`POST`, consultations list + detail +
-  `start`, transcript `GET`, `transcribe` (audio upload; speaker auto-detected),
-  and segment append/edit.
-- Config: AWS/S3 settings + whisper model/device/compute/language.
-- Dependencies pinned and installed: `boto3`, `python-multipart`,
-  `faster-whisper`, `av==13.1.0` (see note below), `numpy`.
+#### Emergencies
 
-> **PyAV pin:** `faster-whisper` 1.2.1 declares only `av>=11`, but its audio
-> decoder calls `av.open(..., metadata_errors="ignore")`, an argument PyAV 14
-> removed. With a newer PyAV, transcription fails at decode time with
-> `open() got an unexpected keyword argument 'metadata_errors'`. Pinning
-> `av==13.1.0` resolves it.
+Triage writes `emergency_intakes`, without assigning a doctor or reserving a
+slot. Rows with `is_met = false` lead the patient's list and the doctors' shared
+unassigned queue, including when a doctor filters scheduled visits by date or
+status. These cards cannot open a consultation before assignment.
 
-#### Frontend
+After staff handle an emergency and manually choose a doctor and an open slot,
+call `POST /api/doctors/{doctor_id}/emergency-intakes/{intake_id}/assign` with
+`patient_id`, `slot_id`, and a UUID `idempotency_key`. This is an explicit API
+operation; no automatic assignment or staff assignment screen was introduced.
+The endpoint checks the chosen slot belongs to the doctor. The same booking
+transaction copies the intake's symptoms/history, creates the appointment,
+links its `emergency_intake_id`, and sets `is_met`/`met_at`. The pending card then
+disappears and the assigned doctor's scheduled consultation appears.
 
-- `src/theme.css` — single source of truth for design tokens (teal primary,
-  surfaces, status colours, spacing, radii). `index.css` imports it and defines
-  shared `.pill--*` and `.btn--*` building blocks.
-- `src/auth/DoctorAuth.jsx` — doctor auth context (persisted profile; no token).
-- Doctor screens under `src/pages/doctor/`:
-  - `DoctorLogin.jsx` — single phone-number field (phone-only sign-in).
-  - `DoctorPortal.jsx` — portal shell (header, nav, sign out).
-  - `SignatureGate.jsx` — signature upload with preview + requirements.
-  - `ConsultationsList.jsx` — date range + status filters, severity-coloured
-    cards.
-  - `ConsultationView.jsx` — collapsible details, consent + start, mic circle
-    with listening animation, editable/appendable transcript, SOAP placeholder.
-    Renders both transcript shapes: one continuous block (plain mode) or
-    speaker-labeled rows (roles mode).
-  - `useAudioRecorder.js` — MediaRecorder + Web Audio level metering.
-  - `consultationMeta.js` — shared severity/status/formatting helpers. Severity
-    uses the app-wide triage categories (Emergency / Severe / Normal).
-- `App.jsx` — doctor routes + `RequireDoctor` guard (redirects to the signature
-  gate until a signature is on file). Landing page routes the Doctor profile to
-  `/doctor/login`.
+#### Verification
 
-### Verification
+```powershell
+cd backend
+.venv/Scripts/python.exe -m pytest tests/test_shared_appointments.py tests/test_soap_storage.py tests/test_intake_graph.py tests/test_soap.py tests/test_soap_graph.py tests/test_sarvam.py -q -p no:cacheprovider
+cd ../frontend
+npm.cmd run build
+```
 
-- Backend unit tests: `pytest -q` — 11 passed.
-- Live API walkthrough (uvicorn on 127.0.0.1:8000): doctor identify (seeded
-  phone → profile; unknown phone → clean error; response carries no token) →
-  signature status → consultations list (today + range) → consultation detail →
-  transcript append (2 segments) → edit (segment marked `edited`) → fetch.
-  Transcript persisted as JSON via the local storage backend.
-- Frontend production build (`npm run build`) is clean.
-- Live transcription + diarization: a synthesized two-voice dialogue (Windows
-  SAPI David/Zira) POSTed to `/transcribe` returned accurate text with automatic
-  speaker labels — 3 of 4 lines correctly attributed, the 4th mislabeled (an
-  expected limitation of lightweight spectral clustering on short clips, which
-  is why labels stay editable). No `metadata_errors` crash.
-- The diarizer's clustering is unit-checked on a synthetic 2-tone signal
-  (alternating segments → Doctor/Patient).
+After deploying the migration, book a future slot as a patient and verify the
+same ID, symptom labels, age, gender and history in the assigned doctor's portal.
+Start it with consent and verify `IN_PROGRESS` in the patient's list. Verify an
+older unseen emergency is still first, then manually assign it and confirm it
+is replaced by one appointment. Retry the booking with the same idempotency key
+and confirm no duplicate row; compete for a slot from two patients and confirm
+only one succeeds. Check a migrated visit's saved transcript remains readable.
 
-### Follow-up fixes (post-initial 2.1)
+### Sarvam speech transcription and SOAP drafts
 
-- **Transcription crash fixed** — pinned `av==13.1.0` (PyAV 14 removed the
-  `metadata_errors` arg faster-whisper 1.2.1 passes).
-- **Severity standardized** — consultations now use Emergency / Severe / Normal
-  (same as the booking classifier), replacing the earlier High / Moderate / Low.
-  Migration `phase_2_1_severity_values.sql` converted existing rows.
-- **Transcript modes** — the transcript now defaults to **plain** mode (one
-  continuous punctuated block, no speaker roles) because automatic diarization
-  mislabeled single-speaker recordings. The role-based mode is retained and can
-  be re-enabled with `TRANSCRIPT_MODE=roles`.
+Sarvam is the only speech-to-text provider. Browser SpeechRecognition, local
+Whisper and the local speaker heuristic have been removed. The browser uses
+MediaRecorder only to capture audio; recognition runs through the backend.
 
-### Follow-ups / known gaps
+#### Configuration
 
-- **Diarization accuracy** (roles mode) is best-effort (lightweight numpy
-  clustering). If higher accuracy is needed, upgrade to pyannote.audio (heavier;
-  model download) behind the same interface.
-- **SOAP clinical summary** is a placeholder — planned for Phase 2.2.
-- **S3 storage** is ready but inactive until AWS credentials are provided; the
-  local filesystem fallback is in use.
-- **Patient-location doctor filtering** (a line added to Phase 1.4 of the
-  workflow) is still not implemented — doctor suggestions don't yet filter by the
-  patient's city.
-- **Patient screens** still use the old blue palette; the theme-token recolour
-  is deferred to the Phase 1.5 UI pass.
-- A synthetic test consultation row (`a7800605-…`, IN_PROGRESS) and the test
-  doctor (`+919500000001`) remain for walkthroughs; clean up before release.
+App-level settings live in `backend/app/config.py`. Set
+`SHOW_SPEECH_TRANSCRIPTS=false` in `backend/.env` (the default) to hide the
+transcript and its editing controls in the doctor portal and omit transcript
+segments from newly signed snapshots. Set it to `true` during technical
+validation, restart the backend, and reload the page to show them again.
+The UI reads the flag from `/api/settings`, which exposes no credentials.
+Recording, transcription storage, SOAP, signature display and upload/retry
+controls work in either mode. This is a display/debug flag, not an access-control
+setting. Existing signed objects are not rewritten; hidden transcripts in old
+snapshots are not displayed. Snapshots created without transcripts cannot later
+display a frozen transcript when the flag is enabled.
+
+Backend modules: `app/doctor` owns identity, profiles and uploaded signatures.
+`app/consultation` owns the appointment lifecycle, recording/transcription,
+translation/SOAP graph and prompts, saved summaries, and signing/finalization.
+Consultation APIs keep their `/api/doctors/...` URLs for compatibility. The UI
+continues to present consultations within the doctor portal.
+
+Set `SARVAM_API_KEY` in `backend/.env` and restart the backend. Optional settings:
+`SARVAM_STT_MODEL=saaras:v4`, `SARVAM_TIMEOUT_SECONDS=60`,
+`SARVAM_MAX_AUDIO_BYTES=104857600`. The key never reaches the frontend.
+Microphone capture requires HTTPS or localhost and browser permission.
+
+#### Flow
+
+1. Keep the existing signature, consultation and consent steps. Consent discloses
+   that recorded audio is sent to Sarvam.
+2. Record the conversation, then stop. There is no live transcription: Sarvam
+   speaker diarization uses its batch API.
+3. The backend creates a job with `mode=codemix`, `language_code=unknown`,
+   diarization and timestamps enabled. Speaker count is automatically detected.
+   Hindi/English and Telugu/English may be mixed; accuracy needs testing with
+   representative accents, microphones and clinical vocabulary.
+4. Upload through a signed URL, start the job, and poll its status. The frontend
+   checks every five seconds, then offers Check again after 120 pending checks.
+5. Save timestamped speaker turns to the existing editable transcript. Speakers
+   are named Person 1, Person 2, Person 3, etc., in order of first appearance.
+   No doctor/patient roles are inferred. Labels apply only within each recording;
+   Person 1 in another recording may be a different person. Unattributed turns
+   display Unidentified speaker.
+
+The application does not persist raw audio. Failed uploads retain audio in the
+current tab for retry; closing the tab loses that audio. Once uploaded, job IDs
+in sessionStorage allow polling to resume on refresh. Backend job metadata lives
+under `transcription_jobs/`; completed results are appended once per recording.
+The transcript remains under `transcripts/`. Discarding a pending recording in
+the UI does not cancel or delete a provider job. Provider retention is governed
+by the Sarvam account/service policy.
+
+Recording stops just below two hours; the backend also enforces the byte limit.
+Saved historical transcripts remain readable. Manual notes and edits remain
+available. There is no automatic fallback to another speech engine.
+
+#### SOAP
+
+Opening a consultation reads the last saved SOAP through GET `/soap`; it never
+calls the LLM. Generate summary / Regenerate summary explicitly requests a new
+draft from the saved transcript. Transcript changes do not overwrite a reviewed
+summary automatically.
+The summary has four full-width rows in one section. Edit summary enables all
+rows, with Apply edits and Cancel. Apply edits persists the four SOAP arrays
+through PUT `/soap`, so the reviewed draft survives reloads.
+
+SOAP generation runs a compiled LangGraph: validate_input -> deidentify ->
+translate_to_english -> generate_soap -> validate_soap. The original multilingual
+transcript remains unchanged in storage and the UI. A separate translation call
+through the shared OpenRouter adapter produces English text for every turn,
+including already-English input. It preserves turn IDs, order, recording scope
+and neutral speaker distinctions. Missing, reordered or blank translations stop
+the pipeline before SOAP. Translation output is de-identified again.
+
+The second model call selects concise English source excerpts into subjective,
+objective, assessment and plan arrays. Each excerpt must occur within a single
+English turn; this validates against translation, not the original-language
+meaning. Translation accuracy and clinical section placement require review.
+No roles, new diagnoses or treatment recommendations are inferred. The draft
+is saved after validation to `soap/<consultation_id>.json`, alongside the
+`transcripts/` objects, using the same configured S3 bucket and prefix (or local
+storage fallback). The JSON contains only the four arrays: `subjective`,
+`objective`, `assessment`, and `plan`; the consultation ID is in the filename.
+Regeneration replaces the saved draft; a failed save returns an error. The
+English intermediate remains transient. Manual summary edits update the saved draft.
+S3 requests use a 5-second connection timeout, a 15-second read timeout, and
+at most two attempts. The UI stops waiting after 120 seconds and offers Retry
+summary. A browser timeout does not cancel backend work; the server may still
+finish saving. Server logs report save completion/failure without draft text.
+The S3 client uses path-style addressing to avoid legacy SOAP routing for the
+root `soap/` prefix when `S3_PREFIX` is empty. Object keys remain unchanged.
+
+#### Sign and close
+
+Apply `backend/database/phase_2_2_signed_consultations.sql` after the unified
+appointments migration, then restart the backend. It adds `finalised_record_key`
+to appointments; existing data is retained.
+
+The assigned doctor can select Sign and close after reviewing the summary and
+applying edits. The server requires an in-progress consultation, recorded
+consent, an existing SOAP draft and an uploaded signature. It writes a uniquely
+named `signed_consultations/<appointment_id>/<uuid>.json` object containing the
+reviewed SOAP, optional validation transcript, signature-image snapshot, doctor identity and signing
+time, then conditionally sets the appointment to `COMPLETED` with its completion
+time and snapshot reference. A failed object save does not close the appointment.
+The signature is the uploaded image, not a cryptographic signing certificate.
+
+Closed visits load SOAP and transcript from this fixed snapshot. The small
+signature is displayed beneath SOAP, even if the doctor later replaces their
+profile signature. UI recording, editing, regeneration and signing controls
+are hidden. Mutation endpoints reject closed visits; completed visits cannot
+be restarted. A late in-flight draft write cannot alter the signed snapshot.
+Signing uses the existing development-stage doctor identity model (phone lookup,
+without session-token authentication).
+
+Both calls reuse OPENROUTER_API_KEY, OPENROUTER_MODEL and the adapter timeout.
+LangSmith reuses the booking flow's LANGSMITH_TRACING, LANGSMITH_API_KEY,
+LANGSMITH_ENDPOINT and project/agent/environment settings. Runs are named
+doctor_consultation_soap, with one span per stage and a generated run UUID.
+Only stage status and counts enter graph state; transcript, English text, model
+payloads and credentials stay in invocation-local context, outside trace inputs
+and outputs. There is no checkpoint persistence or automatic model retry.
+Tracing can be disabled without disabling the workflow.
+
+#### Verification
+
+- Frontend: `npm.cmd run build` from `frontend`.
+- Backend: `python -m pytest tests/test_sarvam.py tests/test_soap.py tests/test_soap_graph.py -q` from
+  `backend` with dependencies installed. Tests use mock HTTP, without real audio.
+- Manual: record two or three consenting speakers mixing languages, stop, check
+  turns and timestamps, reload, edit text, and generate SOAP. Test upload failure
+  and retry, microphone denial, silence, and another recording in the same visit.
+
+Official API reference:
+https://docs.sarvam.ai/api/api-guides-tutorials/speech-to-text/how-to/enable-speaker-diarization
+
+### Validation status and remaining work
+
+- A previous Sarvam connectivity check accepted the configured key and v4 job
+  parameters; the user subsequently confirmed multilingual transcription and
+  speaker differentiation. Representative accents, clinical vocabulary and
+  microphones still require evaluation.
+- Mocked tests cover Sarvam contracts, translation ordering, preservation of
+  original text, missing/reordered translations, neutral speakers, trace-safe
+  state and SOAP excerpt validation. The commands above describe repeatable
+  verification; they are not a claim that every suite ran during consolidation.
+- The later Phase 1.6 regression run passed 45 backend tests, including shared
+  appointments and signed consultations, plus 8 browser tests and the frontend
+  build. The earlier report that Python tests could not run was superseded:
+  the configured environment was accessible outside the sandbox.
+- Real translated SOAP generation and a live LangSmith trace inspection remain
+  unverified in these progress notes. Translation fidelity and clinical section
+  placement require doctor review. No real consultation was sent in the mocked
+  tests. Development-stage doctor authentication remains an open limitation.

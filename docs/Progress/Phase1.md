@@ -1,5 +1,7 @@
 # Phase 1 — Patient portal — Progress
 
+Earlier phase sections record delivery at that stage. Current atomic booking and emergency assignment are documented in the Phase 2.2 integration section below and [Phase 2 progress](Phase2.md#shared-appointments-and-consultations). Phase 1.6 supersedes the earlier separate triage and specialty calls.
+
 ## Phase 1.1 — Project setup + landing page + FastAPI backend
 
 Status: Complete (pending user confirmation)
@@ -270,7 +272,7 @@ Frontend (`BookAppointment.jsx`):
 ### Open items / notes for later phases
 
 - Emergency hand-off to a named person.
-- Full appointment records + patient identity + audit events on booking.
+- Appointment records and patient identity were added in Phase 1.4; atomic booking and idempotency followed in Phase 2.2. Broader audit-event coverage remains a separate follow-up.
 - Doctor availability generation from `doctor_availability` rather than a flat seeder.
 
 
@@ -333,13 +335,13 @@ Frontend (`frontend/src/`):
 - **No phone verification** at this stage (dev), as agreed.
 - **Age stored directly** on the profile (the UI asks for age, not date of birth); the legacy `date_of_birth` column is left unused.
 - **Location = Pune / Hyderabad** dropdown, matching the existing `city` check constraint and where doctors exist.
-- Booking still reserves the slot (OPEN → BOOKED) and now also writes the appointment row linked to the patient.
+- Current booking uses the Phase 2.2 database transaction to lock the future open slot, create the patient appointment and mark the slot BOOKED atomically. A patient and UUID idempotency key are required; retries return the original appointment. The early two-step implementation is superseded.
 
 ### Open items / notes for later phases
 
 - Enable the Supabase Phone provider + SMS provider and switch login to OTP (remove the email-backing shortcut).
 - Enforce authorization with the JWT/role (RLS policies, role checks) — the `role` column and Auth user are in place for this.
-- Cancelling/rescheduling appointments; the appointment detail page from the UI design.
+- Cancelling/rescheduling appointments remain follow-ups. The appointment detail page was completed in Phase 1.5.
 
 
 ### Phase 1.4 follow-up — emergency intakes + unified "My appointments"
@@ -350,10 +352,135 @@ Changes:
 
 - **New `emergency_intakes` table** (`backend/database/phase_1_4_emergency.sql`): `patient_id`, `symptoms` (jsonb, readable labels), `deidentified_text`, `category`, `scores` (jsonb), `is_met` (bool, default false), `met_at`, `created_at`. This is also the queue the front-desk section will use later.
 - **The graph's `emergency` node now records the case** to `emergency_intakes` (de-identified text only; no raw PII). It no longer just logs and ends.
-- **`is_met` flow:** when staff attend to an emergency, they set `is_met = true` and create a normal `appointments` row. So the case lives in exactly one place at a time.
+- **`is_met` flow:** staff explicitly assign an open slot through `POST /api/doctors/{doctor_id}/emergency-intakes/{intake_id}/assign` with patient, slot and UUID idempotency key. One transaction creates the appointment, links `emergency_intake_id`, and sets `is_met`/`met_at`. The intake remains stored for history but leaves the pending queue; do not update the flag independently.
 - **"My appointments" is now a merged list:** all of the patient's `appointments` rows **plus** their **not-yet-met** emergencies (`is_met = false`). Once an emergency is met, it drops out of the emergency source (it's now an appointment), so it's never shown twice. Each item is tagged `type` = `appointment` or `emergency`; the UI shows emergencies with a red "Emergency / Awaiting care team" row.
-- **Bug fix:** the booking endpoint previously swallowed appointment-insert failures and still reported success (so a booking could silently not appear in the list). It now returns `ok = false` with the reason when the appointment record can't be written.
+- **Booking integrity:** appointment-insert failures previously could report success. The initial fix surfaced the error; Phase 2.2 subsequently made slot reservation and appointment creation atomic, so failed inserts cannot leave newly reserved slots behind.
 
-Verification (live): an Emergency intake for the test patient created an `emergency_intakes` row and appeared in "My appointments" alongside the booked appointment; setting `is_met = true` removed it from the list (no duplication). 11 backend tests pass.
+Historical Phase 1.4 verification (before atomic assignment): an Emergency intake for the test patient created an `emergency_intakes` row and appeared in "My appointments" alongside the booked appointment; setting `is_met = true` removed it from the list (no duplication). 11 backend tests pass.
 
-Open items: the front-desk screen to view/attend emergencies (set `is_met` + create the appointment) is a later phase.
+Open items: a front-desk assignment screen remains a later phase. Phase 2.2 provides the explicit assignment API and shared unassigned doctor queue; pending cards cannot open consultations before assignment.
+
+---
+
+### Phase 2.2 integration - shared appointment record
+
+The patient's appointment ID is also the doctor's consultation ID. Both portals
+read the same appointments row; starting a consultation changes it to
+IN_PROGRESS, and signing closes it as COMPLETED. Doctor APIs display BOOKED as
+SCHEDULED. Symptoms, severity, de-identified history, consent and timestamps
+belong to this shared record. Doctor lists are read-only and do not create
+separate consultations.
+
+Booking submits selected symptom details, severity, history, patient and a UUID
+idempotency key. The service-role-only RPC rejects past or occupied slots,
+prevents double-booking, and returns the original record on retries. Pending
+emergencies lead both the patient list and the shared unassigned doctor queue,
+even when doctors filter scheduled visits by date/status. Phase 1.6 adds the
+specialty snapshot to those emergency records.
+
+See [Phase 2.2 shared appointments and consultations](Phase2.md#shared-appointments-and-consultations)
+for migration order, legacy storage IDs, atomic emergency assignment and
+verification steps. Existing migration notes above describe their original
+phase; the Phase 2.2 transaction supersedes the early two-step booking flow.
+
+---
+
+## Phase 1.5 - Patient UI and local doctor suggestions
+
+### UI and routes
+
+The patient portal now follows the desktop and mobile references in `docs/Design`, using the shared teal theme in `frontend/src/theme.css`. Landing, sign-in, registration, assessment, emergency guidance, doctor selection, slot booking, and doctor consultation flows remain available.
+
+- `/patient/book-appointment`: searchable symptoms, keyboard-accessible severity groups, exact duration in days, notes, tab-scoped drafts, and doctor/slot selection. Booking has two keyboard-accessible tabs: Symptoms and Slot booking. Successful intake automatically opens Slot booking; returning to Symptoms preserves the form. Editing symptoms invalidates the old slot result until resubmission. Classification grades and probability bars are not displayed; urgent-care and earliest-slot guidance remain available.
+- `/patient/my-appointments?filter=all|upcoming|past`: appointment history and pending emergency cases. All is the default so existing history stays visible.
+- `/patient/my-appointments/:appointmentId`: symptoms, notes, signed clinical summary, text download, and follow-up booking.
+- `/patient/my-appointments/:appointmentId?edit=1`: edit symptoms and notes while the appointment is still BOOKED. Starting the consultation prevents further patient edits through an atomic status condition.
+
+Drafts are scoped to the patient and browser tab. Explicit Save draft restores the form after navigation or refresh; booking and sign-out remove the saved draft. The existing Show available slots action is retained because the patient must still choose a doctor and slot before booking.
+
+The detail screen releases only the immutable signed SOAP snapshot of a completed visit. Unsigned drafts are not shown. The medicines panel explicitly says Under construction because there is no separate structured prescription source yet. The signed care plan remains visible; medication details are not inferred from it.
+
+New detail GET/PUT requests require a Supabase bearer token belonging to the patient in the URL. Detail lookup and updates also constrain the appointment by patient ID. No database migration is needed beyond the existing shared-appointment and signed-consultation schema.
+
+### Location filtering
+
+For a patient intake, the backend reads `patients.city` from the stored profile. `doctors_with_slots` matches it against `hospitals.city` using case-insensitive equality after whitespace normalization. It filters before querying slots, retains specialty and active-doctor filtering, and keeps the existing availability ordering.
+
+No matching city means no cross-city fallback. Missing profile location or failed profile lookup produces a clear message and no doctor suggestions. Anonymous legacy API callers retain their earlier behavior. This is city matching, not distance/geolocation matching; city aliases are not inferred.
+
+### Accessibility and responsive behavior
+
+Shared tokens provide readable status colors. Forms use associated labels, native radio keyboard behavior, visible focus, error/status messages, and reduced-motion support. Page navigation moves focus to the main region and updates the document title. Both portals use explicit navigation paths, including links from the doctor signature gate. Mobile navigation sits at the bottom with content padding; the appointment table becomes stacked rows.
+
+### Verification
+
+From `frontend`:
+
+```sh
+npm run build
+npm run test:e2e
+```
+
+The Playwright suite uses installed Microsoft Edge in headless mode and starts Vite on port 5174. Its fixtures do not call production services. Seven scenarios cover booking/drafts/history/downloads at 1440, 390 and 320px, editing and unavailable records, emergency/no-slot/error states, doctor navigation and consultation consent, and sign-in/registration. Axe scans check WCAG A/AA rules and the tests assert no horizontal overflow. Screenshots are written under ignored `frontend/test-results/` for visual review.
+
+From `backend`:
+
+```sh
+.venv/Scripts/python.exe -m pytest tests/test_intake_graph.py tests/test_location_filter.py tests/test_patient_details.py tests/test_shared_appointments.py tests/test_signed_consultation.py -q
+```
+
+33 focused backend tests pass. Live Supabase/OpenRouter integration and real microphone recording are not exercised by these fixture-based checks. Automated accessibility checks supplement, rather than replace, manual assistive-technology review.
+
+---
+
+## Phase 1.6 — multilingual intake and patient profile
+
+Status: Implementation complete (pending user acceptance).
+
+### Intake flow
+
+`validate_input -> deidentify -> classify -> emergency / find_doctors`
+
+- Updated per user direction: removed the separate language-detection/translation
+  chat call. Jev receives the de-identified original text and evaluates severity
+  and specialty in one request. No English translation is generated or stored.
+- Both questions instruct Jev to interpret native scripts and romanized mixed
+  language, including Hinglish and Telugu-English Tinglish, preserving negation,
+  duration and uncertainty. These are direct classifications, not sequential
+  translation and classification stages. Language labels are not returned.
+- Free text is scrubbed before traced state and model calls. The existing
+  de-identification limitations for multilingual identifiers still apply.
+- The configured Jev model is unchanged. TypeSafe documents varying non-English
+  accuracy: [language support](https://docs.typesafe.ai/models#language-support).
+  Representative multilingual clinical examples require evaluation before rollout.
+- `classify_intake` asks `triage_category` and `doctor_specialty` together in one
+  Jev decisions request. Both use the highest valid probability. Specialty
+  options come from the database. A missing specialty does not discard a valid
+  emergency decision; unavailable specialties cannot produce doctor suggestions.
+- Emergency records store the specialty snapshot (ID, code, name, scores and
+  confidence). It appears in the intake result and My appointments. Persistence
+  failure is shown to the patient while emergency guidance remains visible.
+
+### Profile
+
+The header profile button opens a modal with name, city, phone, email, age,
+gender, role and patient ID. Only name and city are editable. GET/PATCH
+`/api/patients/{patient_id}/profile` verify the bearer token belongs to that
+profile. Updates reject extra fields, blank names and unsupported cities.
+
+Saved values update the auth context and browser session. Changing city clears
+existing doctor suggestions; a pending old-location response cannot restore
+them. The popup supports Escape, contained keyboard focus and focus restoration.
+
+### Database and verification
+
+- Apply `backend/database/phase_1_6.sql` after the existing emergency migration.
+  It adds a nullable JSONB specialty snapshot, leaving historical rows intact.
+  Applied successfully to the configured Supabase database on 2026-10-28.
+- Backend: 46 regression tests passed, including original-language forwarding,
+  one combined decision call with no chat fallback, emergency specialty persistence, ownership and
+  profile validation, plus existing booking and signed-consultation coverage.
+- Frontend: production build and all 8 Playwright tests passed, including mobile
+  profile editing, focus restoration and accessibility checks.
+- Model tests use deterministic adapters. Live multilingual model accuracy has
+  not been evaluated; test representative local-language inputs before rollout.

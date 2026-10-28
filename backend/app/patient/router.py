@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from app.patient import service
 
@@ -133,6 +133,32 @@ def _verify_patient(patient_id: str, authorization: str | None):
     profile = service.get_patient_by_id(patient_id)
     if not user or not profile or profile.get("auth_user_id") != user.id:
         raise HTTPException(403, "This patient profile is not available.")
+    return profile
+
+
+class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    full_name: str = Field(min_length=1, max_length=120)
+    city: Literal["Pune", "Hyderabad"]
+
+
+@router.get("/{patient_id}/profile", response_model=Profile)
+def patient_profile(patient_id: str, authorization: str | None = Header(default=None)):
+    return service._public_profile(_verify_patient(patient_id, authorization))
+
+
+@router.patch("/{patient_id}/profile", response_model=Profile)
+def update_profile(patient_id: str, request: ProfileUpdate,
+                   authorization: str | None = Header(default=None)):
+    _verify_patient(patient_id, authorization)
+    try:
+        rows = service._require_admin().table("patients").update(
+            request.model_dump()).eq("id", patient_id).execute().data
+    except Exception:
+        raise HTTPException(503, "Could not save your profile. Please retry.") from None
+    if not rows:
+        raise HTTPException(404, "Patient profile not found.")
+    return service._public_profile(rows[0])
 
 
 @router.get("/{patient_id}/appointments/{appointment_id}")

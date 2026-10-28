@@ -11,6 +11,8 @@ Both pick the option with the highest weightage.
 
 from __future__ import annotations
 
+import math
+
 from app.book_appointment.model_adapter import (
     ModelCallError,
     ModelNotConfiguredError,
@@ -32,6 +34,61 @@ from app.book_appointment.schemas import Category, Classification, IntakeRequest
 
 class ClassifierError(RuntimeError):
     """Raised when a classification cannot be completed."""
+
+
+def classify_intake(request, deidentified_text, specialties, adapter):
+    """One Jev request with independent urgency and specialty Choice questions."""
+    questions = {
+        CLASSIFIER_QUESTION_NAME: {"type": "choice", "instructions": CLASSIFIER_INSTRUCTIONS,
+                                   "criteria": CATEGORY_CRITERIA},
+    }
+    if specialties:
+        questions[SPECIALTY_QUESTION_NAME] = {
+            "type": "choice", "instructions": SPECIALTY_INSTRUCTIONS,
+            "criteria": specialty_criteria(specialties),
+        }
+    state = build_state(request, deidentified_text)
+    state += "\nAVAILABLE SPECIALTIES:\n" + "\n".join(
+        f"{s['name']}: {s.get('description', '')}" for s in specialties)
+    try:
+        body = adapter.decisions(state, questions)
+        answers = body.get("answers") or {}
+        triage = _validated_answer(answers.get(CLASSIFIER_QUESTION_NAME), CATEGORY_CRITERIA)
+        classification = Classification(status="OK", category=_to_category(triage[0]),
+                                        scores=triage[1], confidence=triage[2])
+    except (ModelCallError, ModelNotConfiguredError, ValueError, TypeError, AttributeError) as exc:
+        raise ClassifierError("Could not assess your symptoms. Please retry.") from exc
+    specialty = None
+    # Keep a valid emergency decision even if the specialty answer is missing.
+    try:
+        name, scores, confidence = _validated_answer(
+            answers.get(SPECIALTY_QUESTION_NAME), specialty_criteria(specialties))
+        matched = next(s for s in specialties if s["name"] == name)
+        specialty = {**{k: matched.get(k) for k in ("id", "code", "name")},
+                     "scores": scores, "confidence": confidence}
+    except (ValueError, TypeError, AttributeError, StopIteration):
+        pass
+    return classification, specialty
+
+
+def _validated_answer(answer, criteria):
+    if not isinstance(answer, dict):
+        raise ValueError("Missing decision")
+    scores = answer.get("probabilities") or {}
+    if not isinstance(scores, dict) or any(
+        k not in criteria or isinstance(v, bool) or not isinstance(v, (int, float))
+        or not math.isfinite(v) or not 0 <= v <= 1 for k, v in scores.items()
+    ):
+        raise ValueError("Invalid probabilities")
+    choice = _top_label(answer.get("choice"), scores)
+    if choice not in criteria or (scores and not any(scores.values())):
+        raise ValueError("Invalid choice")
+    confidence = answer.get("confidence")
+    if confidence is not None and (isinstance(confidence, bool) or
+        not isinstance(confidence, (int, float)) or not math.isfinite(confidence)
+        or not 0 <= confidence <= 1):
+        raise ValueError("Invalid confidence")
+    return choice, scores, confidence
 
 
 def _to_category(label: str | None) -> Category | None:

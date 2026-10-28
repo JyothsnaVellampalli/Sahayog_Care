@@ -39,6 +39,7 @@ export function PatientAuthProvider({ children }) {
       accessToken: session?.access_token ?? null,
       isAuthenticated: Boolean(session?.profile),
       signIn: (authResponse) => setSession(authResponse),
+      updateProfile: (profile) => setSession(current => current ? { ...current, profile } : current),
       signOut: () => setSession(null),
     }),
     [session]

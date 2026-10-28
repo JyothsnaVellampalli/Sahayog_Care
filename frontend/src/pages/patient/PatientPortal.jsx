@@ -1,4 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import PatientProfile from "./PatientProfile.jsx";
 import { usePatientAuth } from "../../auth/PatientAuth.jsx";
 import "./PatientPortal.css";
 
@@ -17,8 +19,10 @@ const NAV = [
 
 export default function PatientPortal() {
   const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
   const { patient, signOut } = usePatientAuth();
   const patientName = patient?.full_name || "Patient";
+  const initials = patientName.split(" ").filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
 
   function handleSignOut() {
     try { sessionStorage.removeItem("sahayog.intake.draft." + patient?.id); } catch {}
@@ -55,10 +59,12 @@ export default function PatientPortal() {
         ))}
       </nav>
         <div className="portal__profile">
+          <button className="portal__profile-button" type="button" onClick={() => setProfileOpen(true)} aria-label={`${initials} ${patientName}: View and edit your profile`} aria-haspopup="dialog">
           <span className="portal__avatar" aria-hidden="true">
-            {patientName.split(" ").filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase()}
-          </span>
+            {initials}
+          </span>{" "}
           <span className="portal__name">{patientName}</span>
+          </button>
           <button
             className="portal__signout"
             type="button"
@@ -68,6 +74,7 @@ export default function PatientPortal() {
           </button>
         </div>
       </header>
+      {profileOpen && <PatientProfile onClose={() => setProfileOpen(false)} />}
 
 
 

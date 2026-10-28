@@ -25,7 +25,7 @@ from app.patient import service as patient_service
 
 router = APIRouter(prefix="/api", tags=["book_appointment"])
 
-# TODO: Move this types to schema file.
+
 class SymptomOut(BaseModel):
     id: str
     code: str

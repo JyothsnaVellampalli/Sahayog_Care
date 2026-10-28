@@ -3,6 +3,33 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from app.patient import router, service
+from pydantic import ValidationError
+
+
+def test_profile_updates_only_allowed_fields(monkeypatch):
+    query = Query([{"id": "patient", "full_name": "New Name", "city": "Hyderabad"}])
+    monkeypatch.setattr(router, "_verify_patient", lambda *a: {"id": "patient"})
+    monkeypatch.setattr(service, "_require_admin", lambda: query)
+    result = router.update_profile("patient", router.ProfileUpdate(full_name="  New Name  ", city="Hyderabad"))
+    assert query.payload == {"full_name": "New Name", "city": "Hyderabad"}
+    assert ("id", "patient") in query.filters
+    assert result["city"] == "Hyderabad"
+
+
+@pytest.mark.parametrize("payload", [
+    {"full_name": " ", "city": "Pune"},
+    {"full_name": "Name", "city": "Mumbai"},
+    {"full_name": "Name", "city": "Pune", "role": "doctor"},
+])
+def test_profile_rejects_invalid_edits(payload):
+    with pytest.raises(ValidationError):
+        router.ProfileUpdate(**payload)
+
+
+def test_profile_requires_authentication():
+    with pytest.raises(HTTPException) as exc:
+        router.patient_profile("patient", None)
+    assert exc.value.status_code == 401
 
 
 class Query:
