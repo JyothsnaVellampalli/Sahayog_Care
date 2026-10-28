@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { bookSlot, fetchSymptoms, submitIntake } from "../../api.js";
 import SymptomMultiSelect from "../../components/SymptomMultiSelect.jsx";
 import { usePatientAuth } from "../../auth/PatientAuth.jsx";
@@ -31,30 +32,47 @@ function formatSlot(iso) {
 
 const SEVERITIES = ["mild", "moderate", "severe"];
 
-const CATEGORY_STYLES = {
-  Emergency: { bg: "#fce8e6", fg: "#c5221f", label: "Emergency" },
-  Severe: { bg: "#fef7e0", fg: "#b06000", label: "Severe" },
-  Normal: { bg: "#e6f4ea", fg: "#188038", label: "Normal" },
-  "Need more information": { bg: "#f1f3f4", fg: "#5f6368", label: "Need more information" },
-};
-
 export default function BookAppointment() {
   const { patient } = usePatientAuth();
+  const [activeTab, setActiveTab] = useState("symptoms");
+  const slotTabRef = useRef(null);
+  useEffect(() => {
+    if (activeTab === "slots") slotTabRef.current?.focus();
+  }, [activeTab]);
 
   const [catalogue, setCatalogue] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [details, setDetails] = useState({}); // id -> { severity, duration_days }
   const [freeText, setFreeText] = useState("");
 
+  const [draftStatus, setDraftStatus] = useState("");
+  const draftKey = "sahayog.intake.draft." + patient?.id;
+  useEffect(() => {
+    try {
+      const draft = JSON.parse(sessionStorage.getItem(draftKey) || "null");
+      if (draft && Array.isArray(draft.selectedIds) && draft.details && typeof draft.freeText === "string") {
+        setSelectedIds(draft.selectedIds); setDetails(draft.details); setFreeText(draft.freeText);
+        setDraftStatus("Saved draft restored.");
+      }
+    } catch { setDraftStatus("The saved draft could not be restored."); }
+  }, [draftKey]);
+  function saveDraft() {
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify({ selectedIds, details, freeText }));
+      setDraftStatus("Draft saved for this browser tab.");
+    } catch { setDraftStatus("Could not save the draft. Please keep this page open."); }
+  }
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => {
     let active = true;
+    setLoading(true); setLoadError(null);
     fetchSymptoms()
       .then((data) => {
         if (active) setCatalogue(data.symptoms || []);
@@ -68,7 +86,7 @@ export default function BookAppointment() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [retry]);
 
   const byId = useMemo(() => {
     const map = {};
@@ -77,6 +95,7 @@ export default function BookAppointment() {
   }, [catalogue]);
 
   function addSymptom(id) {
+    setResult(null);
     if (!id || selectedIds.includes(id)) return;
     setSelectedIds((prev) => [...prev, id]);
     setDetails((prev) => ({
@@ -86,6 +105,7 @@ export default function BookAppointment() {
   }
 
   function removeSymptom(id) {
+    setResult(null);
     setSelectedIds((prev) => prev.filter((x) => x !== id));
     setDetails((prev) => {
       const next = { ...prev };
@@ -95,6 +115,7 @@ export default function BookAppointment() {
   }
 
   function updateDetail(id, field, value) {
+    setResult(null);
     setDetails((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   }
 
@@ -120,6 +141,7 @@ export default function BookAppointment() {
       };
       const data = await submitIntake(payload);
       setResult(data);
+      setActiveTab("slots");
     } catch (err) {
       setSubmitError(err.message);
     } finally {
@@ -138,19 +160,32 @@ export default function BookAppointment() {
     );
   if (loadError)
     return (
-      <p className="ba__status ba__status--error" role="alert">
-        Could not load symptoms: {loadError}
-      </p>
+      <div className="ba__status ba__status--error" role="alert">
+        <p>Could not load symptoms: {loadError}</p>
+        <button className="btn btn--secondary" onClick={() => setRetry(retry + 1)}>Try again</button>
+      </div>
     );
 
   return (
-    <form className="ba" onSubmit={handleSubmit}>
-      <h2 className="ba__heading">Book an appointment</h2>
+    <section className="ba">
+      <h1 className="ba__heading">Book an appointment</h1>
       <p className="ba__intro">
-        Add your symptoms and any detail. We use this to understand how urgent
-        your condition is.
+        Tell us what you're experiencing. This helps the doctor prepare before your consultation.
       </p>
 
+      <div className="ba__tabs" role="tablist" aria-label="Booking steps" onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === "Home" || !result ? "symptoms" : event.key === "End" ? "slots" : activeTab === "symptoms" ? "slots" : "symptoms";
+        setActiveTab(next);
+        document.getElementById("booking-tab-" + next)?.focus();
+      }}>
+        <button type="button" role="tab" id="booking-tab-symptoms" aria-controls="booking-panel-symptoms" aria-selected={activeTab === "symptoms"} tabIndex={activeTab === "symptoms" ? 0 : -1} onClick={() => setActiveTab("symptoms")}>1. Symptoms</button>
+        <button type="button" role="tab" id="booking-tab-slots" ref={slotTabRef} aria-controls="booking-panel-slots" aria-selected={activeTab === "slots"} tabIndex={activeTab === "slots" ? 0 : -1} disabled={!result} onClick={() => setActiveTab("slots")}>2. Slot booking</button>
+      </div>
+      <div role="tabpanel" id="booking-panel-symptoms" aria-labelledby="booking-tab-symptoms" hidden={activeTab !== "symptoms"}>
+      <form className="ba" onSubmit={handleSubmit}>
+      <fieldset className="ba__card" disabled={submitting}>
       {/* Row 1: searchable multi-select */}
       <div className="ba__row">
         <SymptomMultiSelect
@@ -168,30 +203,25 @@ export default function BookAppointment() {
           {selectedIds.map((id) => {
             const name = byId[id]?.label || id;
             return (
-              <fieldset className="ba__detail" key={id}>
-                <legend className="ba__detail-name">{name}</legend>
+              <div className="ba__detail" key={id} role="group" aria-labelledby={`symptom-${id}`}>
+                <h2 className="ba__detail-name" id={`symptom-${id}`}>{name}</h2>
 
-                <label className="ba__detail-field">
-                  <span>Severity</span>
-                  <select
-                    value={details[id]?.severity || ""}
-                    onChange={(e) => updateDetail(id, "severity", e.target.value)}
-                    aria-label={`Severity of ${name}`}
-                  >
-                    <option value="">—</option>
-                    {SEVERITIES.map((sv) => (
-                      <option key={sv} value={sv}>
-                        {sv}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
+                <fieldset className="ba__severity">
+                  <legend>Severity</legend>
+                  <div className="ba__segments">
+                    {SEVERITIES.map(sv => <label key={sv}>
+                      <input type="radio" name={"severity-" + id} value={sv} required
+                        checked={details[id]?.severity === sv}
+                        onChange={() => updateDetail(id, "severity", sv)} />
+                      <span>{sv}</span>
+                    </label>)}
+                  </div>
+                </fieldset>
                 <label className="ba__detail-field">
                   <span>Duration (days)</span>
                   <input
                     type="number"
-                    min="0"
+                    min="0" max="3650" required
                     value={details[id]?.duration_days ?? ""}
                     onChange={(e) =>
                       updateDetail(id, "duration_days", e.target.value)
@@ -208,7 +238,7 @@ export default function BookAppointment() {
                 >
                   Remove
                 </button>
-              </fieldset>
+              </div>
             );
           })}
         </div>
@@ -220,90 +250,51 @@ export default function BookAppointment() {
       {/* Free-text box */}
       <div className="ba__row">
         <label className="ba__label" htmlFor="free-text">
-          Anything else? (optional)
+          Anything else the doctor should know? (optional)
         </label>
         <textarea
           id="free-text"
           className="ba__textarea"
           rows={4}
-          placeholder="Describe how you feel in your own words."
+          maxLength={4000}
+          placeholder="Medicines you're taking, past conditions, anything that makes symptoms better or worse..."
           value={freeText}
-          onChange={(e) => setFreeText(e.target.value)}
+          onChange={(e) => { setFreeText(e.target.value); setResult(null); }}
         />
       </div>
 
+      <div className="ba__actions">
+      <button type="button" className="btn btn--secondary" onClick={saveDraft}>Save draft</button>
       <button className="ba__submit" type="submit" disabled={!canSubmit}>
         {submitting ? "Checking…" : "Show available slots"}
       </button>
 
+      </div>
+      <p role="status" className="ba__draft-status">{draftStatus}</p>
+      </fieldset>
       {submitError && (
         <p className="ba__status ba__status--error" role="alert">
           {submitError}
         </p>
       )}
 
-      {result && <IntakeResult result={result} />}
-    </form>
+      </form>
+      </div>
+      <div role="tabpanel" id="booking-panel-slots" aria-labelledby="booking-tab-slots" hidden={activeTab !== "slots"}>
+        {result && <IntakeResult result={result} />}
+      </div>
+    </section>
   );
 }
 
 function IntakeResult({ result }) {
-  const classification = result.classification || {};
-  const category = classification.category;
-  const style = category ? CATEGORY_STYLES[category] : null;
-  const scores = classification.scores || {};
-  const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-
   return (
-    <section
-      className="ba__result"
-      aria-live="polite"
-      aria-labelledby="ba-result-heading"
-    >
-      <h3 className="ba__result-heading" id="ba-result-heading">
-        Assessment
-      </h3>
-
-      {category ? (
-        <div
-          className="ba__badge"
-          style={{ backgroundColor: style?.bg, color: style?.fg }}
-        >
-          {style?.label || category}
-        </div>
-      ) : (
-        <div className="ba__badge ba__badge--muted">Could not assess</div>
-      )}
-
-      {ranked.length > 0 && (
-        <ul className="ba__scores">
-          {ranked.map(([label, value]) => {
-            const pct = Math.round(value * 100);
-            return (
-              <li
-                key={label}
-                className="ba__score"
-                aria-label={`${label}: ${pct} percent`}
-              >
-                <span className="ba__score-label" aria-hidden="true">
-                  {label}
-                </span>
-                <span className="ba__score-bar" aria-hidden="true">
-                  <span className="ba__score-fill" style={{ width: `${pct}%` }} />
-                </span>
-                <span className="ba__score-value" aria-hidden="true">
-                  {pct}%
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
+    <section className="ba__result" aria-labelledby="ba-result-heading">
+      <h2 className="ba__result-heading" id="ba-result-heading">Slot booking</h2>
       {/* Emergency: show the handled-later message, no booking. */}
       {result.outcome === "emergency" && (
         <p className="ba__emergency" role="alert">
-          {result.emergency_message}
+          Online slot booking is unavailable for these symptoms. Please seek urgent medical care.
         </p>
       )}
 
@@ -348,6 +339,7 @@ function BookingSection({ result }) {
         history: result.deidentified_text,
       });
       if (res.ok) {
+        try { sessionStorage.removeItem("sahayog.intake.draft." + patient?.id); } catch {}
         setBookedSlotId(slotId);
       } else {
         setBookingError(res.reason || "Could not book this slot.");
@@ -364,13 +356,14 @@ function BookingSection({ result }) {
   if (bookedSlotId) {
     return (
       <p className="ba__booked" role="status">
-        Your appointment slot is reserved. We will confirm the details shortly.
+        Your appointment is booked. <Link to="/patient/my-appointments">View my appointments</Link>
       </p>
     );
   }
 
   return (
     <div className="booking">
+      <p className="booking__location">{patient?.city ? "Showing doctors in " + patient.city + "." : "A city is needed in your profile to find local doctors."}</p>
       {specialtyName && (
         <p className="booking__specialty">
           Suggested specialty: <strong>{specialtyName}</strong>
@@ -379,7 +372,7 @@ function BookingSection({ result }) {
 
       {result.severe_guidance && (
         <p className="booking__severe" role="status">
-          {result.severe_guidance}
+          Please choose the earliest available slot.
         </p>
       )}
 
@@ -416,7 +409,7 @@ function BookingSection({ result }) {
                         type="button"
                         className="slot"
                         onClick={() => handleBook(slot.id)}
-                        disabled={pendingSlot === slot.id}
+                        disabled={pendingSlot !== null}
                         aria-label={`Book ${formatSlot(slot.starts_at)} with ${doc.full_name}`}
                       >
                         {pendingSlot === slot.id

@@ -113,7 +113,7 @@ def get_slot(slot_id: str) -> dict | None:
 
 
 def doctors_with_slots(
-    specialty_id: str, limit_per_doctor: int = 5
+    specialty_id: str, limit_per_doctor: int = 5, city: str | None = None
 ) -> list[dict]:
     """Doctors in a specialty, each with their earliest OPEN slots attached.
 
@@ -121,6 +121,10 @@ def doctors_with_slots(
     the UI can show availability transparently.
     """
     doctors = doctors_by_specialty(specialty_id)
+    if city:
+        normalized = " ".join(city.split()).casefold()
+        doctors = [d for d in doctors if
+                   " ".join(((d.get("hospitals") or {}).get("city") or "").split()).casefold() == normalized]
     if not doctors:
         return []
     slot_map = open_slots_for_doctors(

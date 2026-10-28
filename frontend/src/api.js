@@ -201,3 +201,15 @@ export function editTranscriptSegment(consultationId, index, text) {
     { method: "PUT", body: JSON.stringify({ index, text }) }
   );
 }
+
+export function fetchAppointmentDetail(patientId, appointmentId, accessToken) {
+  return request(`/api/patients/${encodeURIComponent(patientId)}/appointments/${encodeURIComponent(appointmentId)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function updateAppointmentDetails(patientId, appointmentId, accessToken, payload) {
+  return request(`/api/patients/${encodeURIComponent(patientId)}/appointments/${encodeURIComponent(appointmentId)}`, {
+    method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` }, body: JSON.stringify(payload),
+  });
+}

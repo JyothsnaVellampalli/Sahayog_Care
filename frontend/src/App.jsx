@@ -1,8 +1,10 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import LandingPage from "./pages/LandingPage.jsx";
 import PatientLogin from "./pages/patient/PatientLogin.jsx";
 import PatientPortal from "./pages/patient/PatientPortal.jsx";
 import BookAppointment from "./pages/patient/BookAppointment.jsx";
+import AppointmentDetail from "./pages/patient/AppointmentDetail.jsx";
 import MyAppointments from "./pages/patient/MyAppointments.jsx";
 import DoctorLogin from "./pages/doctor/DoctorLogin.jsx";
 import DoctorPortal from "./pages/doctor/DoctorPortal.jsx";
@@ -43,6 +45,14 @@ function RequireDoctor({ children, requireSignature = false }) {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (main) { main.setAttribute("tabindex", "-1"); main.focus({ preventScroll: true }); }
+    window.scrollTo(0, 0);
+    const section = pathname.includes("my-appointments") ? "My appointments" : pathname.includes("book-appointment") ? "Book an appointment" : pathname.includes("consultations") ? "Consultations" : pathname.includes("signature") || pathname.includes("profile") ? "Digital signature" : pathname.includes("login") ? "Sign in" : "Welcome";
+    document.title = `${section} | Sahayog Care`;
+  }, [pathname]);
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
@@ -59,6 +69,7 @@ export default function App() {
         <Route index element={<Navigate to="book-appointment" replace />} />
         <Route path="book-appointment" element={<BookAppointment />} />
         <Route path="my-appointments" element={<MyAppointments />} />
+        <Route path="my-appointments/:appointmentId" element={<AppointmentDetail />} />
       </Route>
 
       {/* Doctor */}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   patientLogin,
   patientLookup,
@@ -94,7 +94,7 @@ export default function PatientLogin() {
 
   return (
     <main className="login" id="main-content">
-      <p className="login__brand">Sahayog Care</p>
+      <Link className="login__brand" to="/">Sahayog Care</Link>
 
       <section
         className="login__card"

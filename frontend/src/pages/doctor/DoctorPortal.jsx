@@ -25,7 +25,7 @@ export default function DoctorPortal() {
 
   function handleSignOut() {
     signOut();
-    navigate("/");
+    navigate("/doctor/login", { replace: true });
   }
 
   return (
@@ -49,7 +49,7 @@ export default function DoctorPortal() {
             {NAV.map((item) => (
               <NavLink
                 key={item.to}
-                to={item.to}
+                to={`/doctor/${item.to}`}
                 className={({ isActive }) =>
                   "dportal__navitem" +
                   (isActive ? " dportal__navitem--active" : "")

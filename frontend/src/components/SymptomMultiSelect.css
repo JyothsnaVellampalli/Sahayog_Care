@@ -8,7 +8,7 @@
 .sms__label {
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: var(--color-text);
 }
 
 /* Selected chips */
@@ -26,9 +26,9 @@
   align-items: center;
   gap: 6px;
   padding: 4px 6px 4px 12px;
-  background: #e8f0fe;
-  color: #174ea6;
-  border: 1px solid #c6dafc;
+  background: var(--color-primary-softer);
+  color: var(--color-primary-hover);
+  border: 1px solid var(--color-primary-soft);
   border-radius: 999px;
   font-size: 13px;
 }
@@ -47,13 +47,13 @@
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #174ea6;
+  color: var(--color-primary-hover);
   font-size: 16px;
   line-height: 1;
 }
 
 .sms__chip-remove:hover {
-  background: #c6dafc;
+  background: var(--color-primary-soft);
 }
 
 /* Combobox input */
@@ -65,20 +65,20 @@
   width: 100%;
   font-size: 14px;
   padding: 10px 12px;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
-  background: #fff;
-  color: #202124;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .sms__input::placeholder {
-  color: #5f6368;
+  color: var(--color-text-muted);
 }
 
 .sms__hint {
   margin: 0;
   font-size: 12px;
-  color: #5f6368;
+  color: var(--color-text-muted);
 }
 
 /* Listbox popup */
@@ -93,8 +93,8 @@
   list-style: none;
   max-height: 260px;
   overflow-y: auto;
-  background: #fff;
-  border: 1px solid #dadce0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(60, 64, 67, 0.18);
 }
@@ -102,7 +102,7 @@
 .sms__option {
   padding: 9px 12px;
   font-size: 14px;
-  color: #202124;
+  color: var(--color-text);
   border-radius: 6px;
   cursor: pointer;
 }
@@ -110,13 +110,20 @@
 /* Hover + keyboard-active share a clear, high-contrast highlight. */
 .sms__option:hover,
 .sms__option--active {
-  background: #e8f0fe;
-  color: #174ea6;
+  background: var(--color-primary-softer);
+  color: var(--color-primary-hover);
 }
 
 .sms__empty {
   padding: 10px 12px;
   font-size: 14px;
-  color: #5f6368;
+  color: var(--color-text-muted);
 }
 /* .sr-only lives in index.css so it is available site-wide. */
+
+.sms__selection { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 12px; border:1px solid var(--color-border-strong); border-radius:var(--radius-sm); background:var(--color-surface); }
+.sms__field { flex:1 1 180px; }
+.sms__input { border:0; padding:8px 0; min-height:36px; font-size:16px; }
+.sms__chip { font-size:14px; background:var(--color-primary-soft); }
+.sms__label { font-size:16px; font-weight:600; }
+.sms__option { min-height:44px; }

@@ -21,8 +21,9 @@ export default function PatientPortal() {
   const patientName = patient?.full_name || "Patient";
 
   function handleSignOut() {
+    try { sessionStorage.removeItem("sahayog.intake.draft." + patient?.id); } catch {}
     signOut();
-    navigate("/");
+    navigate("/patient/login", { replace: true });
   }
 
   return (
@@ -38,11 +39,24 @@ export default function PatientPortal() {
           onClick={() => navigate("/")}
           aria-label="Sahayog Care home"
         >
-          Sahayog Care
+          <span className="portal__brand-mark" aria-hidden="true" />Sahayog Care
         </button>
+      <nav className="portal__nav" aria-label="Patient portal sections">
+        {NAV.map((item) => (
+          <NavLink
+            key={item.to}
+            to={`/patient/${item.to}`}
+            className={({ isActive }) =>
+              "portal__navitem" + (isActive ? " portal__navitem--active" : "")
+            }
+          >
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
         <div className="portal__profile">
           <span className="portal__avatar" aria-hidden="true">
-            {patientName.charAt(0).toUpperCase()}
+            {patientName.split(" ").filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase()}
           </span>
           <span className="portal__name">{patientName}</span>
           <button
@@ -55,19 +69,7 @@ export default function PatientPortal() {
         </div>
       </header>
 
-      <nav className="portal__nav" aria-label="Patient portal sections">
-        {NAV.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              "portal__navitem" + (isActive ? " portal__navitem--active" : "")
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+
 
       <main className="portal__content" id="portal-content" tabIndex={-1}>
         <Outlet />

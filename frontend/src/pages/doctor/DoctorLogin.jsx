@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { doctorIdentify } from "../../api.js";
 import { useDoctorAuth } from "../../auth/DoctorAuth.jsx";
 import "../patient/PatientLogin.css";
@@ -44,7 +44,7 @@ export default function DoctorLogin() {
 
   return (
     <main className="login" id="main-content">
-      <p className="login__brand">Sahayog Care</p>
+      <Link className="login__brand" to="/">Sahayog Care</Link>
 
       <section className="login__card" aria-labelledby="doctor-login-title">
         <h1 className="login__title" id="doctor-login-title">

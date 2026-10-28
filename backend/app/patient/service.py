@@ -281,6 +281,29 @@ def create_appointment(patient_id, slot_id, reason, idempotency_key,
                              deidentify(history).text if history else None)
 
 
+def appointment_detail(patient_id: str, appointment_id: str) -> dict | None:
+    """Patient view of a visit; only signed clinical notes are released."""
+    client = _require_admin()
+    rows = client.table("appointments").select(
+        "id, status, reason, symptoms, history, completed_at, finalised_record_key, "
+        "slots(starts_at, doctors(full_name, specialties(name)))"
+    ).eq("patient_id", patient_id).eq("id", appointment_id).limit(1).execute().data
+    if not rows:
+        return None
+    row = rows[0]
+    slot = row.get("slots") or {}
+    doctor = slot.get("doctors") or {}
+    result = {key: row.get(key) for key in ("id", "status", "reason", "symptoms", "history", "completed_at")}
+    result.update(starts_at=slot.get("starts_at"), doctor_name=doctor.get("full_name"),
+                  specialty=(doctor.get("specialties") or {}).get("name"), soap=None)
+    if row.get("status") == "COMPLETED" and row.get("finalised_record_key"):
+        from app.consultation.finalization import signed_record
+        record = signed_record(row)
+        result.update(soap=record.get("soap"), signed_at=record.get("signed_at"),
+                      signed_by=record.get("doctor_name"))
+    return result
+
+
 # --- Emergency intakes (Phase 1.4 follow-up) ---------------------------------
 
 

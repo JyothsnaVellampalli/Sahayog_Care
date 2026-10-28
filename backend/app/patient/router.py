@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.patient import service
@@ -121,3 +121,56 @@ def appointments(patient_id: str) -> AppointmentsResponse:
     return AppointmentsResponse(
         count=len(items), appointments=[AppointmentOut(**a) for a in items]
     )
+
+
+def _verify_patient(patient_id: str, authorization: str | None):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Please sign in again.")
+    try:
+        user = service._require_admin().auth.get_user(authorization[7:]).user
+    except Exception:
+        raise HTTPException(401, "Please sign in again.") from None
+    profile = service.get_patient_by_id(patient_id)
+    if not user or not profile or profile.get("auth_user_id") != user.id:
+        raise HTTPException(403, "This patient profile is not available.")
+
+
+@router.get("/{patient_id}/appointments/{appointment_id}")
+def appointment_detail(patient_id: str, appointment_id: str, authorization: str | None = Header(default=None)):
+    _verify_patient(patient_id, authorization)
+    from app.storage import StorageError
+    try:
+        result = service.appointment_detail(patient_id, appointment_id)
+    except (service.PatientServiceUnavailable, StorageError):
+        raise HTTPException(503, "Appointment details are temporarily unavailable. Please retry.") from None
+    if result is None:
+        raise HTTPException(404, "Appointment not found.")
+    return result
+
+
+from app.book_appointment.schemas import SymptomDetail
+
+
+class AppointmentDetailsUpdate(BaseModel):
+    symptoms: list[SymptomDetail] = Field(max_length=200)
+    history: str = Field(default="", max_length=4000)
+
+
+@router.put("/{patient_id}/appointments/{appointment_id}")
+def update_appointment_details(patient_id: str, appointment_id: str, request: AppointmentDetailsUpdate,
+                               authorization: str | None = Header(default=None)):
+    _verify_patient(patient_id, authorization)
+    from app.book_appointment.catalogue import valid_symptom_ids, label_for
+    from app.book_appointment.deidentify import deidentify
+    allowed = valid_symptom_ids()
+    if any(s.symptom_id not in allowed for s in request.symptoms):
+        raise HTTPException(422, "Select symptoms from the catalogue.")
+    symptoms = [{"id": s.symptom_id, "label": label_for(s.symptom_id),
+                 "severity": s.severity.value if s.severity else "unknown",
+                 "duration_days": s.duration_days} for s in request.symptoms]
+    rows = service._require_admin().table("appointments").update({
+        "symptoms": symptoms, "history": deidentify(request.history).text,
+    }).eq("patient_id", patient_id).eq("id", appointment_id).eq("status", "BOOKED").execute().data
+    if not rows:
+        raise HTTPException(409, "Only a scheduled appointment can be edited. Reload to see its latest status.")
+    return {"ok": True}

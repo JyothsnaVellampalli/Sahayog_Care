@@ -5,7 +5,7 @@
   justify-content: center;
   min-height: 100vh;
   padding: 24px;
-  background: #f5f6f8;
+  background: var(--color-bg);
 }
 
 .landing__brand {
@@ -15,7 +15,7 @@
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #1a73e8;
+  color: var(--color-primary);
   letter-spacing: 0.2px;
 }
 
@@ -30,12 +30,12 @@
   font-size: 28px;
   font-weight: 400;
   margin: 0 0 8px;
-  color: #202124;
+  color: var(--color-text);
 }
 
 .landing__subtitle {
   font-size: 15px;
-  color: #5f6368;
+  color: var(--color-text-muted);
   margin: 0 0 40px;
 }
 
@@ -73,7 +73,7 @@
 .profile__soon {
   font-size: 12px;
   font-weight: 400;
-  color: #5f6368;
+  color: var(--color-text-muted);
 }
 
 .profile__avatar {
@@ -83,7 +83,7 @@
   width: 88px;
   height: 88px;
   border-radius: 50%;
-  color: #fff;
+  color: var(--color-surface);
   font-size: 36px;
   font-weight: 500;
   box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3);
@@ -93,12 +93,14 @@
   margin-top: 16px;
   font-size: 16px;
   font-weight: 500;
-  color: #202124;
+  color: var(--color-text);
 }
 
 .profile__description {
   margin-top: 6px;
   font-size: 13px;
   line-height: 1.4;
-  color: #5f6368;
+  color: var(--color-text-muted);
 }
+
+@media(max-width:640px) { .landing { padding-top:100px; } .landing__brand { top:24px; left:24px; } }

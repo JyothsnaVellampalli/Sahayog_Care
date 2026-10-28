@@ -187,3 +187,12 @@
     align-self: flex-start;
   }
 }
+
+.clist__range { border-radius:var(--radius-sm); flex-wrap:wrap; }
+.clist__seg { min-height:44px; border-radius:6px; }
+.clist__filter { min-height:44px; }
+.ccard { box-shadow:none; padding:24px; }
+.ccard__time { font-size:20px; color:var(--color-text); }
+.ccard__name { font-size:18px; }
+.ccard__meta { gap:24px; }
+@media(max-width:640px) { .clist__range { width:100%; gap:4px; } .clist__seg { flex:1; padding:8px; } .clist__date { width:100%; } .ccard { padding:20px; } .ccard__meta { flex-wrap:wrap; } }

@@ -90,6 +90,7 @@ export default function SignatureGate() {
         <input
           ref={inputRef}
           type="file"
+          aria-label="Upload digital signature"
           accept="image/png,image/jpeg"
           className="sr-only"
           onChange={(e) => pickFile(e.target.files?.[0])}

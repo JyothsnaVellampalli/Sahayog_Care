@@ -5,7 +5,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: #f5f6f8;
+  background: var(--color-bg);
 }
 
 .login__brand {
@@ -15,14 +15,14 @@
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #1a73e8;
+  color: var(--color-primary);
 }
 
 .login__card {
   width: 100%;
   max-width: 420px;
-  background: #fff;
-  border: 1px solid #ebedef;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 28px;
   box-shadow: 0 1px 3px rgba(60, 64, 67, 0.12);
@@ -32,13 +32,13 @@
   margin: 0 0 16px;
   font-size: 22px;
   font-weight: 500;
-  color: #202124;
+  color: var(--color-text);
 }
 
 .login__intro {
   margin: 0 0 20px;
   font-size: 14px;
-  color: #5f6368;
+  color: var(--color-text-muted);
 }
 
 .login__form {
@@ -61,17 +61,17 @@
   flex-direction: column;
   gap: 6px;
   font-size: 14px;
-  color: #202124;
+  color: var(--color-text);
 }
 
 .login__field input,
 .login__field select {
   font-size: 14px;
   padding: 10px 12px;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
-  background: #fff;
-  color: #202124;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .login__submit {
@@ -79,27 +79,32 @@
   padding: 11px 16px;
   border: none;
   border-radius: 8px;
-  background: #1a73e8;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-surface);
   font-size: 15px;
   font-weight: 500;
 }
 
 .login__submit:hover:not(:disabled) {
-  background: #1766d1;
+  background: var(--color-primary-hover);
 }
 
 .login__submit:disabled {
-  background: #c6dafc;
+  background: var(--color-primary-soft);
   cursor: not-allowed;
 }
 
 .login__error {
   margin: 16px 0 0;
   padding: 10px 12px;
-  background: #fce8e6;
-  color: #c5221f;
-  border: 1px solid #f2b8b5;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
   border-radius: 8px;
   font-size: 14px;
 }
+
+.login { padding-top:100px; padding-bottom:32px; }
+.login__field { min-width:0; }
+.login__field input,.login__field select { min-width:0; width:100%; min-height:44px; }
+@media(max-width:400px) { .login { padding-left:16px; padding-right:16px; } .login__card { padding:20px; } .login__row { flex-direction:column; } }

@@ -26,3 +26,8 @@ Thumbs.db
 
 # Local object storage (signatures, transcripts) — dev fallback for S3
 backend/storage/
+
+# Browser test artifacts
+frontend/test-results/
+frontend/playwright-report/
+.pytest_cache/

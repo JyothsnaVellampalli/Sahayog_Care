@@ -461,3 +461,6 @@
 .cview__signature img { display: block; max-width: 160px; max-height: 72px; object-fit: contain; }
 .cview__signature p, .cview__close p { font-size: 0.875rem; }
 .cview__close { margin-top: 24px; }
+
+.cview__back,.siggate__browse { min-height:44px; }
+.cview__detail { min-width:0; overflow-wrap:anywhere; }

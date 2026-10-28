@@ -90,12 +90,12 @@ export default function SymptomMultiSelect({
       case "ArrowDown":
         e.preventDefault();
         openList();
-        setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+        setActiveIndex((i) => open ? Math.min(i + 1, filtered.length - 1) : (filtered.length ? 0 : -1));
         break;
       case "ArrowUp":
         e.preventDefault();
         openList();
-        setActiveIndex((i) => Math.max(i - 1, 0));
+        setActiveIndex((i) => open ? Math.max(i - 1, 0) : filtered.length - 1);
         break;
       case "Home":
         if (open) {
@@ -145,11 +145,12 @@ export default function SymptomMultiSelect({
       : undefined;
 
   return (
-    <div className="sms" ref={rootRef}>
+    <div className="sms" ref={rootRef} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
       <span className="sms__label" id={labelId}>
         {label}
       </span>
 
+      <div className="sms__selection">
       {/* Selected chips */}
       {selectedOptions.length > 0 && (
         <ul className="sms__chips" aria-label="Selected symptoms">
@@ -177,7 +178,7 @@ export default function SymptomMultiSelect({
           className="sms__input"
           role="combobox"
           aria-expanded={open}
-          aria-controls={listboxId}
+          aria-controls={open ? listboxId : undefined}
           aria-labelledby={labelId}
           aria-describedby={hintId}
           aria-autocomplete="list"
@@ -187,6 +188,7 @@ export default function SymptomMultiSelect({
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
+            setActiveIndex(0);
             openList();
           }}
           onFocus={openList}
@@ -195,9 +197,10 @@ export default function SymptomMultiSelect({
         />
       </div>
 
-      {/* <p className="sms__hint" id={hintId}>
+      </div>
+      <p className="sms__hint" id={hintId}>
         Type to search, use arrow keys to browse, Enter to add.
-      </p> */}
+      </p>
 
       {/* Listbox popup */}
       {open && (
@@ -209,7 +212,7 @@ export default function SymptomMultiSelect({
           aria-labelledby={labelId}
         >
           {filtered.length === 0 ? (
-            <li className="sms__empty" role="option" aria-disabled="true">
+            <li className="sms__empty" role="option" aria-selected={false} aria-disabled="true">
               {query ? "No matching symptoms" : "All symptoms added"}
             </li>
           ) : (

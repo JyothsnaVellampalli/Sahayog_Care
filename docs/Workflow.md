@@ -55,7 +55,7 @@
 - Patient has to see all his previous appointments.
 
 
-[ ] Phase 1.5
+[x] Phase 1.5
 ### Goals
 - UI design has to be updated referring to `docs/Design/Doctor Portal - Screens`
 - While suggesting doctors, use the location from patient profile for filtering doctors.
@@ -68,9 +68,11 @@
 ### Goals
 - Add a language detection and translation node before categorising symptoms.
 - This step should translate all local language text to english.
+- The existing workflow has different stages for severity and specality categorising, club them to one Jev model call. So for even emergency cases, the specality is already stored in database and can show in UI.
 
 ### Done Whwn
 - Thes symptoms mentioned in mixed language like Hinglish, Tinglish should be identified.
+- For emergency cases also, the specality should be shown in UI.
 
 
 [x] Phase 2 - Consultation Scribe
@@ -96,7 +98,6 @@
 
 ### Done When
 - The SOAP summary should be generated, saved. It should be viewed and allowed to edit by the doctor. After the doctor approval, the consulattaion has to be closed. 
-
 
 
 [ ] Phase 3 - Pharmacist Portal

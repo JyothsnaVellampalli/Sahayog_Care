@@ -275,7 +275,21 @@ def _find_doctors(state: IntakeState) -> dict[str, Any]:
             "note": "Could not determine a specialty to find doctors.",
         }
 
-    doctors = doctors_with_slots(specialty["id"], limit_per_doctor=5)
+    # Read location from the stored profile, never from model output or intake text.
+    request = state["request"]
+    city = None
+    if request.patient_id:
+        from app.patient.service import get_patient_by_id
+        try:
+            profile = get_patient_by_id(request.patient_id)
+        except Exception:
+            return {"outcome": "booking", "doctors": [], "severe_guidance": guidance,
+                    "note": "Could not load your location. Please try again."}
+        city = (profile or {}).get("city")
+        if not city or not city.strip():
+            return {"outcome": "booking", "doctors": [], "severe_guidance": guidance,
+                    "note": "Your profile needs a city before we can suggest local doctors. Please contact the care team to update your profile."}
+    doctors = doctors_with_slots(specialty["id"], limit_per_doctor=5, **({"city": city} if city else {}))
     return {
         "outcome": "booking",
         "doctors": doctors,

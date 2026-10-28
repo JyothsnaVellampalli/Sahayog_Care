@@ -10,31 +10,31 @@
 
 :root {
   /* Brand / primary (teal) */
-  --color-primary: #0f766e;
+  --color-primary: #0d6e67;
   --color-primary-hover: #0c5f58;
   --color-primary-contrast: #ffffff;
   --color-primary-soft: #d6ecea; /* halos, selected backgrounds */
   --color-primary-softer: #eafaf7;
 
   /* Surfaces */
-  --color-bg: #f5f6f8;
+  --color-bg: #f5f8f9;
   --color-surface: #ffffff;
   --color-surface-muted: #f8f9fa;
-  --color-border: #e5e7eb;
+  --color-border: #dce4e8;
   --color-border-strong: #d0d5dd;
 
   /* Text */
-  --color-text: #1f2328;
+  --color-text: #1c2b34;
   --color-text-muted: #5f6368;
-  --color-text-subtle: #8b9096;
+  --color-text-subtle: #62717a;
 
   /* Status: success / scheduled / low */
-  --color-success: #188038;
+  --color-success: #147332;
   --color-success-bg: #e6f4ea;
   --color-success-border: #b7e1c3;
 
   /* Status: warning / in-progress / moderate */
-  --color-warning: #b06000;
+  --color-warning: #985200;
   --color-warning-bg: #fef7e0;
   --color-warning-border: #feefc3;
 
