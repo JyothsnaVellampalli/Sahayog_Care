@@ -6,7 +6,7 @@ import "./BookAppointment.css";
 export default function AppointmentEditor({ appointment, patientId, accessToken, onSaved, onCancel }) {
   const [catalogue, setCatalogue] = useState(null);
   const [symptoms, setSymptoms] = useState((appointment.symptoms || []).filter(s => typeof s === "object").map(s => ({ symptom_id: s.id || s.symptom_id, severity: ["mild", "moderate", "severe"].includes(s.severity) ? s.severity : "", duration_days: typeof s.duration_days === "number" ? s.duration_days : "" })));
-  const [history, setHistory] = useState(appointment.history || "");
+  const [symptom_text, setSymptomText] = useState(appointment.symptom_text || "");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { let active = true; fetchSymptoms().then(data => { if (active) setCatalogue(data.symptoms); }).catch(err => { if (active) setError(err.message); }); return () => { active = false; }; }, []);
@@ -15,7 +15,7 @@ export default function AppointmentEditor({ appointment, patientId, accessToken,
   async function save(event) {
     event.preventDefault(); setBusy(true); setError(null);
     try {
-      await updateAppointmentDetails(patientId, appointment.id, accessToken, { symptoms: symptoms.map(s => ({ ...s, severity: s.severity || null, duration_days: s.duration_days === "" ? null : Number(s.duration_days) })), history });
+      await updateAppointmentDetails(patientId, appointment.id, accessToken, { symptoms: symptoms.map(s => ({ ...s, severity: s.severity || null, duration_days: s.duration_days === "" ? null : Number(s.duration_days) })), symptom_text });
       onSaved();
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
@@ -27,11 +27,11 @@ export default function AppointmentEditor({ appointment, patientId, accessToken,
       <SymptomMultiSelect options={catalogue} selectedIds={symptoms.map(s => s.symptom_id)} onRemove={remove} onAdd={id => setSymptoms(current => [...current, { symptom_id: id, severity: "", duration_days: "" }])} />
       {symptoms.map(s => <fieldset className="ba__detail" key={s.symptom_id}>
         <legend>{catalogue.find(c => c.id === s.symptom_id)?.label || s.symptom_id}</legend>
-        <label className="ba__detail-field">Severity<select value={s.severity} onChange={e => update(s.symptom_id, "severity", e.target.value)}><option value="">Not recorded</option>{["mild", "moderate", "severe"].map(value => <option key={value}>{value}</option>)}</select></label>
+        <p>Catalogue severity: {catalogue.find(c => c.id === s.symptom_id)?.severity}</p>
         <label className="ba__detail-field">Duration (days)<input type="number" min="0" max="3650" value={s.duration_days} onChange={e => update(s.symptom_id, "duration_days", e.target.value)} /></label>
         <button type="button" className="ba__remove" onClick={() => remove(s.symptom_id)}>Remove</button>
       </fieldset>)}
-      <label className="ba__row">Your note<textarea className="ba__textarea" maxLength={4000} rows={4} value={history} onChange={e => setHistory(e.target.value)} /></label>
+      <label className="ba__row">Your note<textarea className="ba__textarea" maxLength={4000} rows={4} value={symptom_text} onChange={e => setSymptomText(e.target.value)} /></label>
     </> : !error && <p role="status">Loading symptoms...</p>}
     <div className="detail__actions"><button className="btn btn--primary" disabled={busy || !catalogue}>{busy ? "Saving..." : "Save changes"}</button><button className="btn btn--secondary" type="button" disabled={busy} onClick={onCancel}>Cancel</button></div>
   </form>;

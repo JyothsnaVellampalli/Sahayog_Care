@@ -15,6 +15,14 @@ import "./LandingPage.css";
 
 const PROFILES = [
   {
+    id: "pharmacist",
+    label: "Pharmacist",
+    initial: "Rx",
+    color: "var(--color-primary)",
+    description: "View medicine stock and signed consultations.",
+    ready: true,
+  },
+  {
     id: "patient",
     label: "Patient",
     initial: "P",
@@ -44,6 +52,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
 
   function handleSelect(profile) {
+    if (profile.id === "pharmacist") navigate("/pharmacist/login");
     if (profile.id === "patient") {
       navigate("/patient/login");
     } else if (profile.id === "doctor") {

@@ -87,7 +87,7 @@ def test_edit_is_atomic_and_only_for_booked_visits(monkeypatch):
     monkeypatch.setattr(router, "_verify_patient", lambda *a: None)
     monkeypatch.setattr(service, "_require_admin", lambda: query)
     with pytest.raises(HTTPException) as exc:
-        router.update_appointment_details("patient", "visit", router.AppointmentDetailsUpdate(symptoms=[], history=""))
+        router.update_appointment_details("patient", "visit", router.AppointmentDetailsUpdate(symptoms=[], symptom_text=""))
     assert exc.value.status_code == 409
     assert ("patient_id", "patient") in query.filters
     assert ("id", "visit") in query.filters

@@ -31,6 +31,25 @@ export function fetchAppSettings() {
   return request("/api/settings");
 }
 
+export function pharmacyIdentify(phone) {
+  return request('/api/pharmacy/identify', { method: 'POST', body: JSON.stringify({ phone }) });
+}
+
+export function pharmacyGet(pharmacistId, path, params = {}) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== '' && value != null));
+  return request(`/api/pharmacy/${encodeURIComponent(pharmacistId)}/${path}?${query}`);
+}
+
+export function pharmacyUpdateStock(pharmacistId, brandId, quantity) {
+  return request(`/api/pharmacy/${encodeURIComponent(pharmacistId)}/stock/${encodeURIComponent(brandId)}`,
+    { method: 'PATCH', body: JSON.stringify({ quantity }) });
+}
+
+export function pharmacyResolveReservation(pharmacistId, appointmentId, action) {
+  return request(`/api/pharmacy/${encodeURIComponent(pharmacistId)}/consultations/${encodeURIComponent(appointmentId)}/reservation`,
+    { method: 'POST', body: JSON.stringify({ action }) });
+}
+
 export function submitIntake(payload) {
   return request("/api/appointments/intake", {
     method: "POST",
@@ -38,7 +57,7 @@ export function submitIntake(payload) {
   });
 }
 
-export function bookSlot({ slotId, patientId, reason, idempotencyKey, symptoms, severity, history }) {
+export function bookSlot({ slotId, patientId, reason, idempotencyKey, symptoms, severity, symptom_text, specialtyId }) {
   return request("/api/appointments/book", {
     method: "POST",
     body: JSON.stringify({
@@ -48,7 +67,8 @@ export function bookSlot({ slotId, patientId, reason, idempotencyKey, symptoms, 
       idempotency_key: idempotencyKey,
       symptoms: symptoms || [],
       severity,
-      history,
+      symptom_text,
+      specialty_id: specialtyId ?? null,
     }),
   });
 }
@@ -177,6 +197,32 @@ export function saveSoap(consultationId, soap) {
   return request(`/api/doctors/consultations/${consultationId}/soap`, {
     method: "PUT", body: JSON.stringify(soap),
   });
+}
+
+export function fetchDoctorMedicines(doctorId) {
+  return request(`/api/doctors/${doctorId}/medicines`);
+}
+
+export function fetchPrescription(consultationId, doctorId) {
+  return request(`/api/doctors/consultations/${consultationId}/prescription?doctor_id=${encodeURIComponent(doctorId)}`);
+}
+
+export function savePrescriptionWorkspace(consultationId, doctorId, items) {
+  return request(`/api/doctors/consultations/${consultationId}/prescription/workspace?doctor_id=${encodeURIComponent(doctorId)}`,
+    { method: 'PUT', body: JSON.stringify({ items }), keepalive: true });
+}
+
+export function fetchConsultationProcessing(consultationId, signal) {
+  return request(`/api/doctors/consultations/${consultationId}/processing`, { signal });
+}
+
+export function retryConsultationProcessing(consultationId, jobId) {
+  return request(`/api/doctors/consultations/${consultationId}/processing/${jobId}/retry`, { method: 'POST' });
+}
+
+export function savePrescription(consultationId, doctorId, prescription) {
+  return request(`/api/doctors/consultations/${consultationId}/prescription?doctor_id=${encodeURIComponent(doctorId)}`,
+    { method: 'PUT', body: JSON.stringify(prescription) });
 }
 
 export function signConsultation(consultationId, doctorId, soap) {

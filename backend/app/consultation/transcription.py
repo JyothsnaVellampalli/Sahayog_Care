@@ -1,7 +1,7 @@
 """Sarvam-only transcription jobs and editable transcript storage.
 
 Speaker IDs are scoped to a recording, never inferred doctor/patient roles.
-Audio is transferred to Sarvam but is not persisted by this application.
+Provider checkpoints live in Supabase. Legacy S3 checkpoints remain readable.
 """
 from datetime import datetime, timezone
 from threading import RLock
@@ -106,6 +106,26 @@ def _job_key(consultation_id: str, recording_id: str) -> str:
     return f"transcription_jobs/{consultation_id}/{recording_id}.json"
 
 
+def _load_job(consultation_id, recording_id):
+    from app.consultation.jobs import client
+    rows = (client().table('consultation_recordings').select('provider_state')
+            .eq('appointment_id', consultation_id).eq('recording_id', recording_id).execute().data or [])
+    if rows:
+        return rows[0]['provider_state']
+    legacy = storage.get_json(_job_key(consultation_id, recording_id), strict=True)
+    if legacy:
+        _save_job(consultation_id, recording_id, legacy)
+    return legacy
+
+
+def _save_job(consultation_id, recording_id, job):
+    from app.consultation.jobs import client
+    client().table('consultation_recordings').upsert({
+        'appointment_id': consultation_id, 'recording_id': recording_id,
+        'provider_state': job, 'updated_at': datetime.now(timezone.utc).isoformat(),
+    }).execute()
+
+
 async def submit_recording(consultation_id: str, recording_id: str, audio: bytes,
                            mime_type: str, session: int) -> dict:
     mime = mime_type.split(";")[0].lower().strip()
@@ -113,28 +133,33 @@ async def submit_recording(consultation_id: str, recording_id: str, audio: bytes
         raise SarvamError("Unsupported recording format. Use WebM, Ogg, MP4, WAV or MP3.")
     if not audio or len(audio) > settings.sarvam_max_audio_bytes:
         raise SarvamError("Recording is empty or exceeds the configured audio upload limit.")
-    key = _job_key(consultation_id, recording_id)
-    job = storage.get_json(key)
+    job = _load_job(consultation_id, recording_id)
     async with httpx.AsyncClient(timeout=settings.sarvam_timeout_seconds) as http:
         client = SarvamClient(http)
         if not job:
             job = {"job_id": await client.create(), "session": session, "uploaded": False}
-            storage.put_json(key, job)
+            _save_job(consultation_id, recording_id, job)
         if job.get("completed"):
             return {"recording_id": recording_id, "state": "Completed"}
         if not job["uploaded"]:
             await client.upload(job["job_id"], audio, f"recording.{_MIME_EXTENSIONS[mime]}", mime)
             job["uploaded"] = True
-            storage.put_json(key, job)
+            _save_job(consultation_id, recording_id, job)
         status = await client.status(job["job_id"])
+        if status.get('job_state') == 'Failed':
+            job = {'job_id': await client.create(), 'session': session, 'uploaded': False}
+            _save_job(consultation_id, recording_id, job)
+            await client.upload(job['job_id'], audio, f"recording.{_MIME_EXTENSIONS[mime]}", mime)
+            job['uploaded'] = True
+            _save_job(consultation_id, recording_id, job)
+            status = {'job_state': 'Accepted'}
         if status.get("job_state") == "Accepted":
             await client.start(job["job_id"])
     return {"recording_id": recording_id, "state": "Processing"}
 
 
-async def poll_recording(consultation_id: str, recording_id: str) -> dict:
-    key = _job_key(consultation_id, recording_id)
-    job = storage.get_json(key)
+async def poll_recording(consultation_id: str, recording_id: str, *, persist=True) -> dict:
+    job = _load_job(consultation_id, recording_id)
     if not job:
         raise SarvamError("Recording job not found. Retry uploading the recording.")
     if job.get("completed"):
@@ -155,6 +180,8 @@ async def poll_recording(consultation_id: str, recording_id: str) -> dict:
             raise SarvamError("Sarvam returned an unexpected job status. Please retry checking.")
         result = await client.result(job["job_id"], status)
     turns = normalize_result(result, recording_id, job["session"])
+    if not persist:
+        return {'state': 'Completed', 'segments': turns, 'note': None if turns else 'No speech was detected in this recording.'}
     with _TRANSCRIPT_LOCK:
         segments = load_transcript(consultation_id)
         if not any(s.get("recording_id") == recording_id for s in segments):
@@ -162,5 +189,5 @@ async def poll_recording(consultation_id: str, recording_id: str) -> dict:
             save_transcript(consultation_id, segments)
         note = None if turns else "No speech was detected in this recording."
         job.update(completed=True, note=note)
-        storage.put_json(key, job)
+        _save_job(consultation_id, recording_id, job)
     return {"state": "Completed", "segments": segments, "note": note}

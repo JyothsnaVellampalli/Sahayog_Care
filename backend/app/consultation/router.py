@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from uuid import UUID
+from uuid import UUID, uuid4
+import asyncio
+import base64
 import logging
 from time import monotonic
 
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException
 from pydantic import BaseModel, Field
+from postgrest.exceptions import APIError
 
-from app.consultation import service, transcription, soap, finalization
+from app.consultation import service, transcription, soap, finalization, prescriptions, jobs
+from app import storage
 from app.consultation.soap import SoapDraft
 from app.consultation.sarvam import SarvamError
 from app.config import settings
@@ -64,9 +68,8 @@ class ConsultationDetail(BaseModel):
     status: str | None = None
     severity: str | None = None
     symptoms: list = Field(default_factory=list)
-    history: str | None = None
-    allergies: str | None = None
-    vitals: str | None = None
+    symptom_text: str | None = None
+    specialty_id: str | None = None
     consent_recorded: bool = False
     transcript_key: str | None = None
     started_at: str | None = None
@@ -116,20 +119,23 @@ def get_transcript(consultation_id: str) -> TranscriptResponse:
         try:
             record = finalization.signed_record(visit)
             return TranscriptResponse(segments=record.get("segments", []) if settings.show_speech_transcripts else [])
-        except (StorageError, OSError):
+        except (StorageError, OSError, service.ConsultationServiceUnavailable):
             raise HTTPException(status_code=503, detail="Could not load signed transcript.") from None
-    return TranscriptResponse(segments=transcription.load_transcript(_storage_id(consultation_id)))
+    try:
+        return TranscriptResponse(segments=jobs.load_transcript(visit))
+    except (StorageError, OSError, APIError, service.ConsultationServiceUnavailable):
+        raise HTTPException(503, 'Could not load the saved transcript. Please retry.') from None
 
 
-@router.post("/consultations/{consultation_id}/transcribe")
+@router.post("/consultations/{consultation_id}/transcribe", status_code=202)
 async def transcribe(
     consultation_id: UUID,
     file: UploadFile = File(...),
     recording_id: UUID = Form(...),
     session: int = Form(1, ge=1),
 ):
-    """Upload to Sarvam; poll separately for speaker-labeled text."""
-    detail = _editable(str(consultation_id))
+    """Persist audio and enqueue work before acknowledging the upload."""
+    detail = await asyncio.to_thread(_editable, str(consultation_id))
     if not detail:
         raise HTTPException(status_code=404, detail="Consultation not found.")
     if not detail.get("consent_recorded"):
@@ -137,13 +143,15 @@ async def transcribe(
     audio = await file.read(settings.sarvam_max_audio_bytes + 1)
     if len(audio) > settings.sarvam_max_audio_bytes:
         raise HTTPException(status_code=413, detail="Recording exceeds the audio upload limit.")
+    mime = (file.content_type or '').split(';')[0].lower().strip()
+    if not audio or mime not in transcription._MIME_EXTENSIONS:
+        raise HTTPException(422, 'Upload a non-empty supported audio recording.')
     try:
-        return await transcription.submit_recording(
-            _storage_id(str(consultation_id)), str(recording_id), audio,
-            file.content_type or "application/octet-stream", session,
-        )
-    except SarvamError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from None
+        job = await asyncio.to_thread(jobs.enqueue, str(consultation_id), 'TRANSCRIPTION', str(recording_id),
+                                      {'audio_base64': base64.b64encode(audio).decode('ascii'), 'mime': mime, 'session': session})
+        return {'job': public_job(job), 'recording_id': str(recording_id), 'state': 'Processing'}
+    except (StorageError, OSError, APIError, service.ConsultationServiceUnavailable):
+        raise HTTPException(503, 'Could not save the recording. Retry uploading it.') from None
 
 
 @router.get("/consultations/{consultation_id}/transcription-jobs/{recording_id}")
@@ -164,30 +172,59 @@ class AppendSegmentRequest(BaseModel):
 @router.post("/consultations/{consultation_id}/transcript/segment", response_model=TranscriptResponse)
 def append_segment(consultation_id: str, request: AppendSegmentRequest) -> TranscriptResponse:
     """Manually append a transcript segment (typed by the doctor)."""
-    _editable(consultation_id)
-    segments = transcription.append_segment(
-        _storage_id(consultation_id), request.speaker, request.text, session=request.session
-    )
+    visit = _editable(consultation_id)
+    segments = jobs.load_transcript(visit)
+    segments.append({'speaker': request.speaker, 'text': request.text, 'session': request.session,
+                     'ts': transcription._now_hhmm(), 'edited': False})
+    _save_transcript_draft(visit, segments)
     return TranscriptResponse(segments=segments)
 
 
-@router.post("/consultations/{consultation_id}/soap", response_model=soap.SoapDraft)
-def generate_soap(consultation_id: str) -> soap.SoapDraft:
-    _editable(consultation_id)
+@router.post("/consultations/{consultation_id}/soap", status_code=202)
+def generate_soap(consultation_id: str):
+    visit = _editable(consultation_id)
     try:
-        object_id = _storage_id(consultation_id)
-        draft = soap.generate_draft(transcription.load_transcript(object_id))
-        _editable(consultation_id)  # It may have closed while the model ran.
-        logger.info("SOAP generation completed; saving draft JSON")
-        save_started = monotonic()
-        soap.save_draft(object_id, draft)
-        logger.info("SOAP draft JSON saved in %.2fs", monotonic() - save_started)
-        return draft
-    except soap.SoapError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if not jobs.load_transcript(visit):
+            raise HTTPException(422, 'Record audio or add a transcript note before generating SOAP.')
+        return {'job': public_job(jobs.enqueue(visit['id'], 'SOAP', str(uuid4()), {'force': True}))}
+    except APIError as exc:
+        raise HTTPException(409 if exc.code == 'P0001' else 503, 'Could not start SOAP processing. Refresh and retry.') from None
+    except (StorageError, OSError, service.ConsultationServiceUnavailable):
+        raise HTTPException(503, 'Could not start SOAP processing. Your transcript is saved.') from None
+
+
+def public_job(job):
+    return {key: job.get(key) for key in ('id', 'kind', 'state', 'error', 'created_at', 'updated_at')}
+
+
+@router.get('/consultations/{consultation_id}/processing')
+def processing_status(consultation_id: UUID):
+    _visit(str(consultation_id))
+    try:
+        return jobs.status(str(consultation_id))
+    except (APIError, service.ConsultationServiceUnavailable):
+        raise HTTPException(503, 'Processing status is temporarily unavailable. Please retry.') from None
+
+
+@router.post('/consultations/{consultation_id}/processing/{job_id}/retry', status_code=202)
+def retry_processing(consultation_id: UUID, job_id: UUID):
+    _editable(str(consultation_id))
+    try:
+        job = jobs.client().rpc('retry_consultation_job', {'p_visit': str(consultation_id), 'p_job': str(job_id)}).execute().data
+        return {'job': public_job(job)}
+    except APIError as exc:
+        raise HTTPException(409 if exc.code == 'P0001' else 503, 'Could not retry processing. Refresh the consultation.') from None
+
+
+def _save_transcript_draft(visit, segments):
+    try:
+        key = f"transcript_edits/{visit['id']}/{uuid4()}.json"
+        storage.put_json(key, {'segments': segments})
+        jobs.client().rpc('save_consultation_draft', {'p_visit': visit['id'], 'p_kind': 'TRANSCRIPTION', 'p_key': key}).execute()
+    except APIError as exc:
+        raise HTTPException(409 if exc.code == 'P0001' else 503, 'Wait for processing to finish, then retry saving your transcript edits.') from None
     except (StorageError, OSError):
-        logger.warning("SOAP draft JSON could not be saved")
-        raise HTTPException(status_code=503, detail="Could not save the SOAP draft. Please try again.") from None
+        raise HTTPException(503, 'Could not save transcript edits.') from None
 
 
 class EditSegmentRequest(BaseModel):
@@ -198,10 +235,12 @@ class EditSegmentRequest(BaseModel):
 @router.put("/consultations/{consultation_id}/transcript/segment", response_model=TranscriptResponse)
 def edit_segment(consultation_id: str, request: EditSegmentRequest) -> TranscriptResponse:
     """Edit a transcript segment's text (marks it edited)."""
-    _editable(consultation_id)
-    segments = transcription.edit_segment(
-        _storage_id(consultation_id), request.index, request.text
-    )
+    visit = _editable(consultation_id)
+    segments = jobs.load_transcript(visit)
+    if request.index >= len(segments):
+        raise HTTPException(409, 'Transcript changed. Reload before editing.')
+    segments[request.index].update(text=request.text, edited=True)
+    _save_transcript_draft(visit, segments)
     return TranscriptResponse(segments=segments)
 
 
@@ -233,18 +272,22 @@ def get_soap(consultation_id: str):
         if visit.get("finalised_record_key"):
             record = finalization.signed_record(visit)
             return {key: value for key, value in record.items() if key != "segments"}
-        draft = soap.load_draft(_storage_id(consultation_id))
+        draft = soap.load_for_visit(visit)
         return {"soap": draft.model_dump() if draft else None, "signature": None}
-    except (StorageError, OSError, ValueError, KeyError):
+    except (StorageError, OSError, ValueError, KeyError, service.ConsultationServiceUnavailable):
         raise HTTPException(status_code=503, detail="Could not load the saved SOAP summary.") from None
 
 
 @router.put("/consultations/{consultation_id}/soap", response_model=soap.SoapDraft)
 def update_soap(consultation_id: str, draft: soap.SoapDraft):
-    _editable(consultation_id)
+    visit = _editable(consultation_id)
     try:
-        soap.save_draft(_storage_id(consultation_id), draft)
+        key = f'soap_results/{consultation_id}/edited-{uuid4()}.json'
+        storage.put_json(key, {'soap': draft.model_dump(), 'suggestions': []})
+        jobs.client().rpc('save_consultation_draft', {'p_visit': visit['id'], 'p_kind': 'SOAP', 'p_key': key}).execute()
         return draft
+    except APIError as exc:
+        raise HTTPException(409 if exc.code == 'P0001' else 503, 'Wait for processing to finish before saving SOAP edits.') from None
     except (StorageError, OSError):
         raise HTTPException(status_code=503, detail="Could not save the SOAP edits.") from None
 
@@ -252,6 +295,64 @@ def update_soap(consultation_id: str, draft: soap.SoapDraft):
 class SignConsultationRequest(BaseModel):
     doctor_id: UUID
     soap: SoapDraft
+
+
+def _prescription_owner(consultation_id, doctor_id, editable=False):
+    visit = _editable(consultation_id) if editable else _visit(consultation_id)
+    if visit.get('doctor_id') != str(doctor_id):
+        raise HTTPException(403, 'Consultation does not belong to this doctor.')
+    if editable and visit.get('status') != 'IN_PROGRESS':
+        raise HTTPException(409, 'Start the consultation before prescribing medicines.')
+    return visit
+
+
+@router.get('/{doctor_id}/medicines')
+def medicine_catalogue(doctor_id: UUID):
+    try:
+        return prescriptions.catalogue(str(doctor_id))
+    except service.ConsultationError as exc:
+        raise HTTPException(404, str(exc)) from None
+    except (APIError, service.ConsultationServiceUnavailable):
+        raise HTTPException(503, 'Medicine catalogue unavailable. Please retry.') from None
+
+
+@router.get('/consultations/{consultation_id}/prescription')
+def get_prescription(consultation_id: str, doctor_id: UUID):
+    visit = _prescription_owner(consultation_id, doctor_id)
+    try:
+        if visit.get('finalised_record_key'):
+            record = finalization.signed_record(visit)
+            return {'items': record.get('prescription', []), 'reviewed': True, 'suggestions': [],
+                    'soap_revision': prescriptions.revision(record['soap'])}
+        object_id = _storage_id(consultation_id)
+        return prescriptions.load(object_id, soap.load_for_visit(visit), visit=visit)
+    except (StorageError, OSError, ValueError, KeyError, service.ConsultationServiceUnavailable):
+        raise HTTPException(503, 'Could not load the prescription. Please retry.') from None
+
+
+@router.put('/consultations/{consultation_id}/prescription')
+def save_prescription(consultation_id: str, doctor_id: UUID, request: prescriptions.PrescriptionDraft):
+    _prescription_owner(consultation_id, doctor_id, editable=True)
+    try:
+        catalogue = prescriptions.catalogue(str(doctor_id))
+        _prescription_owner(consultation_id, doctor_id, editable=True)
+        saved = prescriptions.save(_storage_id(consultation_id), str(doctor_id), request, catalogue['items'])
+        return {**saved, 'reviewed': True}
+    except service.ConsultationError as exc:
+        raise HTTPException(409, str(exc)) from None
+    except (StorageError, OSError, APIError, service.ConsultationServiceUnavailable):
+        raise HTTPException(503, 'Could not save the prescription. Please retry.') from None
+
+
+@router.put('/consultations/{consultation_id}/prescription/workspace')
+def save_prescription_workspace(consultation_id: str, doctor_id: UUID, request: prescriptions.PrescriptionWorkspace):
+    _prescription_owner(consultation_id, doctor_id, editable=True)
+    try:
+        return prescriptions.save_workspace(consultation_id, request)
+    except service.ConsultationError as exc:
+        raise HTTPException(409, str(exc)) from None
+    except (StorageError, OSError, APIError, service.ConsultationServiceUnavailable):
+        raise HTTPException(503, 'Could not autosave the prescription. Your browser draft is retained.') from None
 
 
 @router.post("/consultations/{consultation_id}/sign", response_model=ConsultationDetail)

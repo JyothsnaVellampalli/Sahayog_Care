@@ -7,6 +7,8 @@ added in later phases.
 """
 
 from __future__ import annotations
+import asyncio
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,8 +19,22 @@ from app.config import settings
 from app.doctor.router import router as doctor_router
 from app.consultation.router import router as consultation_router
 from app.patient.router import router as patient_router
+from app.pharmacy.router import router as pharmacy_router
+from app.consultation.jobs import worker
+
+
+@asynccontextmanager
+async def lifespan(app):
+    workers = [asyncio.create_task(worker()) for _ in range(2)] if settings.supabase_configured else []
+    try:
+        yield
+    finally:
+        for task in workers:
+            task.cancel()
+        await asyncio.gather(*workers, return_exceptions=True)
 
 app = FastAPI(
+    lifespan=lifespan,
     title=f"{settings.app_name} API",
     version="0.1.0",
     description="Backend API for the Sahayog Care patient and doctor platform.",
@@ -36,6 +52,7 @@ app.include_router(book_appointment_router)
 app.include_router(patient_router)
 app.include_router(doctor_router)
 app.include_router(consultation_router)
+app.include_router(pharmacy_router)
 
 
 @app.get("/api/settings", tags=["settings"])

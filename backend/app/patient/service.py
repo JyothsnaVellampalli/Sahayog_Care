@@ -223,7 +223,7 @@ def list_appointments(patient_id: str) -> list[dict]:
     appt_res = (
         client.table("appointments")
         .select(
-            "id, status, reason, created_at, "
+            "id, status, reason, created_at, specialty_id, specialties(name), "
             "slots(starts_at, ends_at, doctors(full_name, specialties(name)))"
         )
         .eq("patient_id", patient_id)
@@ -234,7 +234,7 @@ def list_appointments(patient_id: str) -> list[dict]:
     for a in appt_res.data or []:
         slot = a.get("slots") or {}
         doctor = (slot.get("doctors") or {}) if slot else {}
-        specialty = (doctor.get("specialties") or {}) if doctor else {}
+        specialty = a.get("specialties") or {}
         out.append(
             {
                 "type": "appointment",
@@ -272,20 +272,20 @@ def list_appointments(patient_id: str) -> list[dict]:
 
 
 def create_appointment(patient_id, slot_id, reason, idempotency_key,
-                       symptoms=None, severity=None, history=None):
+                       symptoms=None, severity=None, symptom_text=None, specialty_id=None):
     """Create the shared visit and reserve its slot atomically."""
     from app import appointments
     from app.book_appointment.deidentify import deidentify
     return appointments.book(_require_admin(), patient_id, slot_id, reason,
                              idempotency_key, symptoms, severity,
-                             deidentify(history).text if history else None)
+                             deidentify(symptom_text).text if symptom_text else None, specialty_id=specialty_id)
 
 
 def appointment_detail(patient_id: str, appointment_id: str) -> dict | None:
     """Patient view of a visit; only signed clinical notes are released."""
     client = _require_admin()
     rows = client.table("appointments").select(
-        "id, status, reason, symptoms, history, completed_at, finalised_record_key, "
+        "id, status, reason, symptoms, symptom_text, completed_at, finalised_record_key, specialty_id, specialties(name), "
         "slots(starts_at, doctors(full_name, specialties(name)))"
     ).eq("patient_id", patient_id).eq("id", appointment_id).limit(1).execute().data
     if not rows:
@@ -293,13 +293,14 @@ def appointment_detail(patient_id: str, appointment_id: str) -> dict | None:
     row = rows[0]
     slot = row.get("slots") or {}
     doctor = slot.get("doctors") or {}
-    result = {key: row.get(key) for key in ("id", "status", "reason", "symptoms", "history", "completed_at")}
+    result = {key: row.get(key) for key in ("id", "status", "reason", "symptoms", "symptom_text", "completed_at")}
     result.update(starts_at=slot.get("starts_at"), doctor_name=doctor.get("full_name"),
-                  specialty=(doctor.get("specialties") or {}).get("name"), soap=None)
+                  specialty=(row.get("specialties") or {}).get("name"), soap=None)
     if row.get("status") == "COMPLETED" and row.get("finalised_record_key"):
         from app.consultation.finalization import signed_record
         record = signed_record(row)
         result.update(soap=record.get("soap"), signed_at=record.get("signed_at"),
+                      prescription=record.get("prescription", []),
                       signed_by=record.get("doctor_name"))
     return result
 

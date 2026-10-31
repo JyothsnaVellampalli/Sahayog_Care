@@ -51,7 +51,7 @@ def test_traced_state_contains_only_progress():
         updates = list(soap_graph._GRAPH.stream({"stage": "started"}, stream_mode="updates"))
     finally:
         soap_graph._PAYLOAD.reset(token)
-    assert [next(iter(u)) for u in updates] == ["validate_input", "deidentify", "translate_to_english", "generate_soap", "validate_soap"]
+    assert [next(iter(u)) for u in updates] == ["validate_input", "deidentify", "translate_to_english", "generate_soap", "validate_soap", "medicine_prescription"]
     for update in updates:
         for value in update.values():
-            assert set(value) <= {"stage", "turn_count", "translated_count", "excerpt_count"}
+            assert set(value) <= {"stage", "turn_count", "translated_count", "excerpt_count", "medicine_count"}

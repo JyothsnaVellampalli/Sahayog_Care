@@ -165,9 +165,10 @@ def update_profile(patient_id: str, request: ProfileUpdate,
 def appointment_detail(patient_id: str, appointment_id: str, authorization: str | None = Header(default=None)):
     _verify_patient(patient_id, authorization)
     from app.storage import StorageError
+    from app.consultation.service import ConsultationServiceUnavailable
     try:
         result = service.appointment_detail(patient_id, appointment_id)
-    except (service.PatientServiceUnavailable, StorageError):
+    except (service.PatientServiceUnavailable, StorageError, ConsultationServiceUnavailable):
         raise HTTPException(503, "Appointment details are temporarily unavailable. Please retry.") from None
     if result is None:
         raise HTTPException(404, "Appointment not found.")
@@ -179,23 +180,23 @@ from app.book_appointment.schemas import SymptomDetail
 
 class AppointmentDetailsUpdate(BaseModel):
     symptoms: list[SymptomDetail] = Field(max_length=200)
-    history: str = Field(default="", max_length=4000)
+    symptom_text: str = Field(default="", max_length=4000)
 
 
 @router.put("/{patient_id}/appointments/{appointment_id}")
 def update_appointment_details(patient_id: str, appointment_id: str, request: AppointmentDetailsUpdate,
                                authorization: str | None = Header(default=None)):
     _verify_patient(patient_id, authorization)
-    from app.book_appointment.catalogue import valid_symptom_ids, label_for
+    from app.book_appointment.catalogue import valid_symptom_ids, label_for, symptom_index
     from app.book_appointment.deidentify import deidentify
     allowed = valid_symptom_ids()
     if any(s.symptom_id not in allowed for s in request.symptoms):
         raise HTTPException(422, "Select symptoms from the catalogue.")
     symptoms = [{"id": s.symptom_id, "label": label_for(s.symptom_id),
-                 "severity": s.severity.value if s.severity else "unknown",
+                 "severity": symptom_index()[s.symptom_id]["severity"],
                  "duration_days": s.duration_days} for s in request.symptoms]
     rows = service._require_admin().table("appointments").update({
-        "symptoms": symptoms, "history": deidentify(request.history).text,
+        "symptoms": symptoms, "symptom_text": deidentify(request.symptom_text).text,
     }).eq("patient_id", patient_id).eq("id", appointment_id).eq("status", "BOOKED").execute().data
     if not rows:
         raise HTTPException(409, "Only a scheduled appointment can be edited. Reload to see its latest status.")

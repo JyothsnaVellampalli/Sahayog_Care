@@ -39,18 +39,15 @@ def get_consultation(consultation_id):
         return None
     columns = "*, patients(full_name, age, gender), slots(doctor_id, starts_at, ends_at)"
     rows = admin.table("appointments").select(columns).eq("id", consultation_id).limit(1).execute().data
-    if not rows:
-        rows = admin.table("appointments").select(columns).eq(
-            "legacy_consultation_id", consultation_id).limit(1).execute().data
     return appointments.doctor_view(rows[0]) if rows else None
 
 
 def storage_id(consultation_id):
-    """Keep pre-migration transcripts, SOAP and recording jobs reachable."""
+    """Use the shared appointment ID for transcripts, SOAP and recording jobs."""
     visit = get_consultation(consultation_id)
     if not visit:
         raise ConsultationError("Consultation not found.")
-    return visit.get("legacy_consultation_id") or visit["id"]
+    return visit["id"]
 
 
 def start_consultation(consultation_id, consent):

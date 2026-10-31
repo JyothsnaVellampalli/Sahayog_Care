@@ -10,7 +10,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from app.book_appointment.catalogue import label_for, valid_symptom_ids
+from app.book_appointment.catalogue import label_for, valid_symptom_ids, symptom_index
 from app.book_appointment.classifier import ClassifierError, classify_intake
 from app.book_appointment.db import doctors_with_slots, list_specialties
 from app.book_appointment.deidentify import deidentify
@@ -86,7 +86,8 @@ def _selected_summary(request: IntakeRequest) -> list[dict]:
         {
             "id": s.symptom_id,
             "label": label_for(s.symptom_id),
-            "severity": s.severity.value if s.severity else "unknown",
+            "severity": symptom_index().get(s.symptom_id, {}).get("severity", "unknown"),
+            "specialty": symptom_index().get(s.symptom_id, {}).get("specialty"),
             "duration_days": (
                 s.duration_days if s.duration_days is not None else "unknown"
             ),
@@ -149,7 +150,10 @@ def _classify(state: IntakeState) -> dict[str, Any]:
             state["request"], state.get("deidentified_text", ""), specialties, adapter)
         return {"classification": classification, "specialty": specialty,
                 "model": adapter.classifier_model,
-                "note": None if specialty else "Specialty matching is unavailable. Please retry."}
+                "note": ("Please describe your symptoms in more detail."
+                         if classification.category == Category.needs_more_info else
+                         None if specialty else
+                         "No supported specialty could be confirmed. Please contact the care team.")}
     except ClassifierError as exc:
         return {"classification": Classification(status="UNAVAILABLE", category=None),
                 "model": None, "note": str(exc), "outcome": "unavailable"}
@@ -165,7 +169,7 @@ def _route_after_classify(state: IntakeState) -> str:
     category = classification.category if classification else None
     if category == Category.emergency:
         return "emergency"
-    if classification and classification.status != "OK":
+    if classification and (classification.status != "OK" or category == Category.needs_more_info):
         return END
     return "find_doctors"
 

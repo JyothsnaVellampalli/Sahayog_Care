@@ -133,7 +133,7 @@ def test_emergency_ends_without_booking(monkeypatch):
 def test_normal_lists_specialty_and_doctors(monkeypatch):
     _patch_db(monkeypatch)
     stub = StubJev("Normal", {"Emergency": 0.0, "Severe": 0.1, "Normal": 0.9}, specialty="Cardiology")
-    req = IntakeRequest(symptoms=[SymptomDetail(symptom_id="S079")], free_text="palpitations")
+    req = IntakeRequest(symptoms=[SymptomDetail(symptom_id="S006")], free_text="palpitations")
     resp = run_intake(req, adapter=stub)
     assert resp.outcome == "booking"
     assert resp.specialty is not None

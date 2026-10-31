@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 test('profile popup loads, saves and restores focus', async ({ page }) => {
@@ -30,10 +30,10 @@ test('profile popup loads, saves and restores focus', async ({ page }) => {
   await expect(trigger).toBeFocused();
 });
 
-const symptoms = [{ id: 'S027', label: 'Cough' }, { id: 'S019', label: 'Chest pain' }];
+const symptoms = [{ id: 'S006', label: 'Palpitations', severity: 'mild', specialty: 'cardiology' }, { id: 'S001', label: 'Chest pain', severity: 'emergency', specialty: 'cardiology' }];
 const future = '2099-10-28T10:00:00Z';
-const booked = { id: 'visit', type: 'appointment', status: 'BOOKED', starts_at: future, doctor_name: 'Dr. Test', reason: 'General Medicine', symptoms: [{ id: 'S027', label: 'Cough', severity: 'mild', duration_days: 2 }], history: 'Cough for two days' };
-const past = { ...booked, id: 'past', status: 'COMPLETED', starts_at: '2020-10-01T10:00:00Z', soap: { subjective: ['Cough'], objective: ['Reviewed'], assessment: ['Signed assessment'], plan: ['Follow the care plan'] }, signed_at: '2020-10-01T11:00:00Z', signed_by: 'Dr. Test' };
+const booked = { id: 'visit', type: 'appointment', status: 'BOOKED', starts_at: future, doctor_name: 'Dr. Test', reason: 'Cardiology', symptoms: [{ id: 'S006', label: 'Palpitations', severity: 'mild', duration_days: 2 }], symptom_text: 'Palpitations for two days' };
+const past = { ...booked, id: 'past', status: 'COMPLETED', starts_at: '2020-10-01T10:00:00Z', soap: { subjective: ['Palpitations'], objective: ['Reviewed'], assessment: ['Signed assessment'], plan: ['Follow the care plan'] }, signed_at: '2020-10-01T11:00:00Z', signed_by: 'Dr. Test' };
 async function fixtures(page) {
   await page.addInitScript(() => {
     localStorage.setItem('sahayog.patient.session', JSON.stringify({ profile: { id: 'patient', full_name: 'Test Patient', city: 'Pune' }, access_token: 'test-token' }));
@@ -42,7 +42,7 @@ async function fixtures(page) {
     const url = new URL(route.request().url());
     let data;
     if (url.pathname === '/api/symptoms') data = { symptoms };
-    else if (url.pathname.endsWith('/intake')) data = { classification: { category: 'Normal', scores: { Normal: 1 } }, outcome: 'booking', symptoms: booked.symptoms, specialty: { name: 'General Medicine' }, doctors: [{ id: 'doc', full_name: 'Dr. Test', city: 'Pune', slots: [{ id: 'slot', starts_at: future }] }] };
+    else if (url.pathname.endsWith('/intake')) data = { classification: { category: 'Normal', scores: { Normal: 1 } }, outcome: 'booking', symptoms: booked.symptoms, specialty: { name: 'Cardiology' }, doctors: [{ id: 'doc', full_name: 'Dr. Test', city: 'Pune', slots: [{ id: 'slot', starts_at: future }] }] };
     else if (url.pathname.endsWith('/book')) data = { ok: true };
     else if (url.pathname.endsWith('/appointments')) data = { appointments: [booked, past, { id: 'emergency', type: 'emergency', status: 'EMERGENCY_PENDING', reason: 'Emergency case' }] };
     else if (url.pathname.endsWith('/appointments/visit')) data = route.request().method() === 'PUT' ? { ok: true } : booked;
@@ -61,13 +61,12 @@ for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await fixtures(page);
     await page.goto('/patient/book-appointment');
-    const combo = page.getByRole('combobox', { name: 'Symptoms' });
-    await combo.fill('Cough'); await combo.press('ArrowDown'); await combo.press('Enter'); await combo.press('Escape');
-    await page.getByRole('radio', { name: 'mild', exact: true }).check();
+    const combo = page.getByRole('combobox', { name: 'Symptoms (optional)' });
+    await combo.fill('Palpitations'); await combo.press('ArrowDown'); await combo.press('Enter'); await combo.press('Escape');
     await page.getByRole('spinbutton').fill('2');
     await page.getByRole('button', { name: 'Save draft' }).click();
     await expect(page.getByRole('status')).toContainText('Draft saved');
-    await page.reload(); await expect(page.getByRole('radio', { name: 'mild', exact: true })).toBeChecked();
+    await page.reload(); await expect(page.getByRole('spinbutton')).toHaveValue('2');
     await accessible(page);
     await page.screenshot({ path: `test-results/booking-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Show available slots' }).click();
@@ -77,7 +76,7 @@ for (const width of [1440, 390, 320]) {
     await expect(page.getByText('Showing doctors in Pune.')).toBeVisible();
     await accessible(page);
     await page.getByRole('tab', { name: '1. Symptoms' }).click();
-    await expect(page.getByRole('radio', { name: 'mild', exact: true })).toBeChecked();
+    await expect(page.getByRole('spinbutton')).toHaveValue('2');
     await page.getByRole('tab', { name: '1. Symptoms' }).press('ArrowRight');
     await expect(page.getByRole('tab', { name: '2. Slot booking' })).toBeFocused();
     await page.getByRole('button', { name: /Book .* with Dr. Test/ }).click();
@@ -105,7 +104,7 @@ test('scheduled detail editing, refresh, unavailable detail, and auth redirect',
   await accessible(page);
   const save = page.waitForRequest(req => req.method() === 'PUT');
   await page.getByRole('button', { name: 'Save changes' }).click();
-  expect((await save).postDataJSON().history).toBe('Updated note');
+  expect((await save).postDataJSON().symptom_text).toBe('Updated note');
   await expect(page.getByText('Appointment details saved.')).toBeVisible();
   await page.reload(); await expect(page.getByRole('heading', { name: 'Appointment details' })).toBeVisible();
   await page.goto('/patient/my-appointments/missing');
@@ -139,10 +138,27 @@ test('empty slots, emergency guidance, and failed assessment preserve the intake
   await expect(page.getByRole('alert')).toContainText('Please try again');
 });
 
+test('text-only intake submits without a dropdown selection or an old draft', async ({ page }) => {
+  await fixtures(page);
+  await page.addInitScript(() => sessionStorage.setItem('sahayog.intake.draft.patient', JSON.stringify({
+    selectedIds: ['S001'], details: {}, freeText: 'Old catalogue draft'
+  })));
+  await page.goto('/patient/book-appointment');
+  await expect(page.getByRole('button', { name: 'Show available slots' })).toBeDisabled();
+  await expect(page.getByRole('spinbutton')).toHaveCount(0);
+  await page.getByRole('textbox', { name: /Anything else/ }).fill('Palpitations since yesterday');
+  const intake = page.waitForRequest(req => req.url().endsWith('/intake'));
+  await page.getByRole('button', { name: 'Show available slots' }).click();
+  const payload = (await intake).postDataJSON();
+  expect(payload.symptoms).toEqual([]);
+  expect(payload.free_text).toBe('Palpitations since yesterday');
+  await expect(page.getByRole('button', { name: /Book .* with Dr. Test/ })).toBeVisible();
+});
+
 test('doctor signature navigation, consultation screen, and mobile accessibility', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => localStorage.setItem('sahayog.doctor.session', JSON.stringify({ profile: { id: 'doctor', full_name: 'Dr. Test Doctor', has_signature: true } })));
-  const visit = { id: 'doctor-visit', status: 'SCHEDULED', severity: 'Normal', patient_name: 'Test Patient', patient_age: 30, patient_gender: 'female', symptoms: ['Cough'], starts_at: future, history: 'Two days' };
+  const visit = { id: 'doctor-visit', status: 'SCHEDULED', severity: 'Normal', patient_name: 'Test Patient', patient_age: 30, patient_gender: 'female', symptoms: ['Palpitations'], starts_at: future, symptom_text: 'Two days' };
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
     const data = path.endsWith('/settings') ? { show_speech_transcripts: true } : path.endsWith('/consultations') ? { consultations: [visit] } : path.endsWith('/transcript') ? { segments: [] } : path.endsWith('/soap') ? {} : visit;

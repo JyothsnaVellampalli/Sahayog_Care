@@ -30,7 +30,6 @@ function formatSlot(iso) {
  *  - submit categorises the condition (Emergency / Severe / Normal).
  */
 
-const SEVERITIES = ["mild", "moderate", "severe"];
 
 export default function BookAppointment() {
   const { patient } = usePatientAuth();
@@ -50,7 +49,7 @@ export default function BookAppointment() {
   const [freeText, setFreeText] = useState("");
 
   const [draftStatus, setDraftStatus] = useState("");
-  const draftKey = "sahayog.intake.draft." + patient?.id;
+  const draftKey = "sahayog.intake.v3.draft." + patient?.id;
   useEffect(() => {
     try {
       const draft = JSON.parse(sessionStorage.getItem(draftKey) || "null");
@@ -139,7 +138,7 @@ export default function BookAppointment() {
         patient_id: patient?.id ?? null,
         symptoms: selectedIds.map((id) => ({
           symptom_id: id,
-          severity: details[id]?.severity || null,
+
           duration_days:
             details[id]?.duration_days === "" ||
             details[id]?.duration_days == null
@@ -204,7 +203,7 @@ export default function BookAppointment() {
           selectedIds={selectedIds}
           onAdd={addSymptom}
           onRemove={removeSymptom}
-          label="Symptoms"
+          label="Symptoms (optional)"
         />
       </div>
 
@@ -217,22 +216,12 @@ export default function BookAppointment() {
               <div className="ba__detail" key={id} role="group" aria-labelledby={`symptom-${id}`}>
                 <h2 className="ba__detail-name" id={`symptom-${id}`}>{name}</h2>
 
-                <fieldset className="ba__severity">
-                  <legend>Severity</legend>
-                  <div className="ba__segments">
-                    {SEVERITIES.map(sv => <label key={sv}>
-                      <input type="radio" name={"severity-" + id} value={sv} required
-                        checked={details[id]?.severity === sv}
-                        onChange={() => updateDetail(id, "severity", sv)} />
-                      <span>{sv}</span>
-                    </label>)}
-                  </div>
-                </fieldset>
+                <p>Catalogue severity: {byId[id]?.severity} · {byId[id]?.specialty}</p>
                 <label className="ba__detail-field">
                   <span>Duration (days)</span>
                   <input
                     type="number"
-                    min="0" max="3650" required
+                    min="0" max="3650"
                     value={details[id]?.duration_days ?? ""}
                     onChange={(e) =>
                       updateDetail(id, "duration_days", e.target.value)
@@ -305,7 +294,7 @@ function IntakeResult({ result }) {
       {/* Emergency: show the handled-later message, no booking. */}
       {result.outcome === "emergency" && (
         <p className="ba__emergency" role="alert">
-          It looks like an emergency. Our team will contact you immediately to help you get care.
+          Please seek urgent medical care. Do not wait for an appointment or a callback.
         </p>
       )}
 
@@ -348,10 +337,11 @@ function BookingSection({ result }) {
         idempotencyKey: bookingKeys.get(slotId),
         symptoms: result.symptoms,
         severity: category,
-        history: result.deidentified_text,
+        specialtyId: result.specialty?.id,
+        symptom_text: result.deidentified_text,
       });
       if (res.ok) {
-        try { sessionStorage.removeItem("sahayog.intake.draft." + patient?.id); } catch {}
+        try { sessionStorage.removeItem("sahayog.intake.v3.draft." + patient?.id); } catch {}
         setBookedSlotId(slotId);
       } else {
         setBookingError(res.reason || "Could not book this slot.");

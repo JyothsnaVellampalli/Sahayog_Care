@@ -23,6 +23,7 @@ import { useAudioRecorder } from "./useAudioRecorder.js";
 import { useSarvamTranscription } from "./useSarvamTranscription.js";
 import "./ConsultationView.css";
 import { useDoctorAuth } from "../../auth/DoctorAuth.jsx";
+import PrescriptionEditor from './PrescriptionEditor.jsx';
 
 /**
  * Consultation view (Phase 2.1, design screens 3 & 4).
@@ -40,9 +41,7 @@ function fmtMMSS(total) {
 
 const DETAIL_SECTIONS = [
   { key: "symptoms", label: "Symptoms" },
-  { key: "history", label: "History" },
-  { key: "allergies", label: "Allergies" },
-  { key: "vitals", label: "Vitals" },
+  { key: "symptom_text", label: "Patient symptom description" },
 ];
 
 export default function ConsultationView() {
@@ -75,15 +74,17 @@ function ConsultationContent() {
   const [busyTranscribe, setBusyTranscribe] = useState(false);
   const [note, setNote] = useState(null);
   const [soap, setSoap] = useState(null);
-  const [soapBusy, setSoapBusy] = useState(false);
+  const [soapSaving, setSoapBusy] = useState(false);
   const [soapError, setSoapError] = useState(null);
   const [soapEditing, setSoapEditing] = useState(false);
   const [soapFields, setSoapFields] = useState({});
   const [soapLoaded, setSoapLoaded] = useState(false);
   const [signed, setSigned] = useState(null);
   const [signing, setSigning] = useState(false);
+  const [prescriptionReady, setPrescriptionReady] = useState(false);
   const closed = ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(detail?.status);
   const soapRequest = useRef(0);
+  const soapRevision = useRef(0);
 
   // Session increments each time recording resumes (drives "Resumed" divider).
   const sessionRef = useRef(1);
@@ -95,15 +96,20 @@ function ConsultationContent() {
     transcriptRevision.current += 1;
     setSegments(saved);
     sessionRef.current = saved.reduce((m, s) => Math.max(m, s.session || 1), sessionRef.current);
-  }, detail?.status === "IN_PROGRESS");
+  }, detail?.status === "IN_PROGRESS", (saved) => {
+    soapRevision.current += 1;
+    setSoap(saved.soap); setSoapLoaded(true); setSoapError(null); setPrescriptionReady(false);
+  });
   const recorder = useAudioRecorder((blob) => sarvam.submit(blob, sessionRef.current));
   const transcriptBusy = busyTranscribe || sarvam.busy;
+  const soapBusy = soapSaving || sarvam.soapBusy;
 
   // Loading a visit only reads saved SOAP; generation is an explicit action.
   useEffect(() => {
     let active = true;
+    const revision = soapRevision.current;
     fetchSoap(consultationId).then((saved) => {
-      if (!active) return;
+      if (!active || revision !== soapRevision.current) return;
       setSoap(saved.soap);
       setSigned(saved.signature ? saved : null);
       setSoapLoaded(true);
@@ -114,21 +120,21 @@ function ConsultationContent() {
   useEffect(() => () => { soapRequest.current += 1; }, []);
 
   useEffect(() => {
-    if (closed || (!recorder.recording && !sarvam.pending)) return;
+    if (closed || (!recorder.recording && !sarvam.uploading)) return;
     function warnOnLeave(event) { event.preventDefault(); event.returnValue = ""; }
     window.addEventListener("beforeunload", warnOnLeave);
     return () => window.removeEventListener("beforeunload", warnOnLeave);
-  }, [recorder.recording, sarvam.pending, closed]);
+  }, [recorder.recording, sarvam.uploading, closed]);
 
   async function handleGenerateSoap() {
     if (closed || signing) return;
     const request = ++soapRequest.current;
     setSoapBusy(true);
+    setPrescriptionReady(false);
     setSoapError(null);
     setSoapEditing(false);
     try {
-      const draft = await generateSoap(consultationId);
-      if (request === soapRequest.current) setSoap(draft);
+      await sarvam.startSoap();
     } catch (err) {
       if (request === soapRequest.current) setSoapError(err.message);
     } finally {
@@ -148,6 +154,7 @@ function ConsultationContent() {
       [key, text.split("\n").map((line) => line.trim()).filter(Boolean)]));
     try {
       setSoap(await saveSoap(consultationId, edited));
+      setPrescriptionReady(false);
       setSoapEditing(false);
     } catch (err) { setSoapError(err.message); }
     finally { setSoapBusy(false); }
@@ -450,7 +457,7 @@ function ConsultationContent() {
         {!closed && sarvam.note && (
           <div className="cview__live" role="status">
             <p>{sarvam.note}</p>
-            {sarvam.pending && !sarvam.busy && <div>
+            {sarvam.pending && !sarvam.pending.uploaded && !sarvam.busy && <div>
               {(!sarvam.pending.failed || sarvam.pending.blob) && (
                 <button className="btn btn--secondary" onClick={sarvam.retry}>
                   {sarvam.pending.failed ? "Retry processing" : sarvam.pending.uploaded ? "Check again" : "Retry upload"}
@@ -464,6 +471,11 @@ function ConsultationContent() {
         )}
 
       {/* Transcript */}
+      {!closed && sarvam.pollError && <p className="cview__error" role="alert">{sarvam.pollError}</p>}
+      {!closed && sarvam.failedJobs.map(job => <div key={job.id} className="cview__error" role="alert">
+        <p>{job.kind === 'SOAP' ? 'SOAP generation' : 'Audio processing'} could not finish. {job.error}</p>
+        <button className="btn btn--secondary" onClick={() => sarvam.retryJob(job)}>Retry {job.kind === 'SOAP' ? 'SOAP' : 'audio processing'}</button>
+      </div>)}
       {showTranscripts && <div className="cview__transcript">
         <div className="cview__transcript-head">
           <h2 className="cview__transcript-title">Transcript</h2>
@@ -571,29 +583,29 @@ function ConsultationContent() {
       {/* Saved SOAP and the final signature snapshot. */}
       <div className="cview__soap">
         <div className="cview__soap-head">
-          <h2 className="cview__transcript-title">Clinical summary</h2>
+          <h2 className="cview__transcript-title">SOAP summary</h2>
           <span className="pill pill--neutral">{closed ? "Closed" : "Unsigned draft"}</span>
           {!closed && soap && !soapEditing && <button className="cview__row-edit" onClick={editSummary}
             disabled={soapBusy || recorder.recording || recorder.starting || transcriptBusy || Boolean(sarvam.pending) || editingIndex != null}>
             Edit summary
           </button>}
+          {!closed && soapLoaded && !soapEditing && !soapBusy && !sarvam.busy && segments.length > 0 && <button className="btn btn--secondary" onClick={handleGenerateSoap}
+            disabled={!segments.length || soapBusy || recorder.recording || recorder.starting || transcriptBusy || Boolean(sarvam.pending) || editingIndex != null}>
+            {soap ? "Regenerate SOAP" : "Generate SOAP"}
+          </button>}
         </div>
         {!closed && <p className="cview__soap-hint">
-          Review the saved summary and apply any edits before signing. Regenerate only when you want a new summary from the transcript.
+          SOAP is prepared automatically after audio processing. Review the summary before signing.
         </p>}
         {!soapLoaded && !soapError && <p role="status">Loading saved summary...</p>}
-        {!closed && soapLoaded && !soapEditing && <button className="btn btn--secondary" onClick={handleGenerateSoap}
-          disabled={!segments.length || soapBusy || recorder.recording || recorder.starting || transcriptBusy || Boolean(sarvam.pending) || editingIndex != null}>
-          {soap ? "Regenerate summary" : "Generate summary"}
-        </button>}
-        {soapBusy && <p role="status">Translating and preparing your SOAP summary…</p>}
+        {soapBusy && <p role="status">Generating SOAP… You can select medicines below. Processing continues if you leave this screen.</p>}
         {soapError && <div role="alert"><p className="cview__error">{soapError}</p>
           <button className="btn btn--secondary" onClick={() => window.location.reload()}>Reload saved summary</button>
         </div>}
         {soap && <div className="cview__soap-sections" aria-live="polite">
           {["subjective", "objective", "assessment", "plan"].map((key) => (
             <section key={key}>
-              <h3 id={`soap-${key}`}>{key[0].toUpperCase() + key.slice(1)}</h3>
+              <h3 id={`soap-${key}`}><span aria-hidden="true">{key[0].toUpperCase()} · </span>{key[0].toUpperCase() + key.slice(1)}</h3>
               {!closed && soapEditing ? <textarea aria-labelledby={`soap-${key}`} rows={3}
                 value={soapFields[key] || ""}
                 onChange={(event) => setSoapFields((fields) => ({ ...fields, [key]: event.target.value }))} />
@@ -606,18 +618,21 @@ function ConsultationContent() {
           <button disabled={soapBusy} className="btn btn--secondary" onClick={() => setSoapEditing(false)}>Cancel</button>
           <button disabled={soapBusy} className="btn btn--primary" onClick={applySummaryEdits}>Apply edits</button>
         </div>}
-        {closed && signed?.signature && <div className="cview__signature">
-          <img src={signed.signature} alt={`Signature of ${signed.doctor_name || "doctor"}`} />
-          <p>{signed.doctor_name}</p>
-          <p>Signed and closed {new Date(signed.signed_at).toLocaleString()}</p>
-        </div>}
       </div>
+      {detail && started && <PrescriptionEditor consultationId={consultationId} doctorId={doctor.id}
+        soap={soap} closed={closed} onReady={setPrescriptionReady} processing={soapBusy || sarvam.busy}
+        locked={signing || !started || doctor.id !== detail.doctor_id} />}
+      {closed && signed?.signature && <div className="cview__signature">
+        <img src={signed.signature} alt={`Signature of ${signed.doctor_name || "doctor"}`} />
+        <p>{signed.doctor_name}</p>
+        <p>Signed and closed {new Date(signed.signed_at).toLocaleString()}</p>
+      </div>}
       {!closed && started && soap && <div className="cview__close">
         <button className="btn btn--primary" onClick={handleSign}
-          disabled={!doctor?.id || doctor.id !== detail.doctor_id || !soapLoaded || soapBusy || soapEditing || recorder.recording || recorder.starting || transcriptBusy || Boolean(sarvam.pending) || editingIndex != null}>
+          disabled={!prescriptionReady || !doctor?.id || doctor.id !== detail.doctor_id || !soapLoaded || soapBusy || soapEditing || recorder.recording || recorder.starting || transcriptBusy || Boolean(sarvam.pending) || editingIndex != null}>
           {signing ? "Signing and closing..." : "Sign and close"}
         </button>
-        <p>Signing closes this consultation and locks its summary and transcript.</p>
+        <p>Review and save the prescription before signing. Signing closes this consultation and freezes its summary, prescription and transcript.</p>
       </div>}
       </fieldset>
     </section>

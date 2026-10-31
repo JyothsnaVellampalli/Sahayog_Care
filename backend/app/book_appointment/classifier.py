@@ -30,6 +30,7 @@ from app.book_appointment.prompt import (
     specialty_criteria,
 )
 from app.book_appointment.schemas import Category, Classification, IntakeRequest
+from app.book_appointment.catalogue import symptom_index, CATEGORY_BY_SEVERITY
 
 
 class ClassifierError(RuntimeError):
@@ -38,6 +39,10 @@ class ClassifierError(RuntimeError):
 
 def classify_intake(request, deidentified_text, specialties, adapter):
     """One Jev request with independent urgency and specialty Choice questions."""
+    ranks = {"Normal": 0, "Need more information": -1, "Severe": 1, "Emergency": 2}
+    selected_categories = [CATEGORY_BY_SEVERITY[symptom_index()[s.symptom_id]["severity"]]
+                           for s in request.symptoms if s.symptom_id in symptom_index()]
+    floor = max(selected_categories, key=ranks.get) if selected_categories else None
     questions = {
         CLASSIFIER_QUESTION_NAME: {"type": "choice", "instructions": CLASSIFIER_INSTRUCTIONS,
                                    "criteria": CATEGORY_CRITERIA},
@@ -57,7 +62,12 @@ def classify_intake(request, deidentified_text, specialties, adapter):
         classification = Classification(status="OK", category=_to_category(triage[0]),
                                         scores=triage[1], confidence=triage[2])
     except (ModelCallError, ModelNotConfiguredError, ValueError, TypeError, AttributeError) as exc:
+        if floor == "Emergency":
+            return Classification(status="OK", category=Category.emergency), None
         raise ClassifierError("Could not assess your symptoms. Please retry.") from exc
+    if floor in ("Severe", "Emergency") and ranks[floor] > ranks[classification.category.value]:
+        # No invented model probabilities when a deterministic catalogue rule wins.
+        classification = Classification(status="OK", category=Category(floor))
     specialty = None
     # Keep a valid emergency decision even if the specialty answer is missing.
     try:

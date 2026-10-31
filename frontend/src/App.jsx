@@ -12,6 +12,7 @@ import SignatureGate from "./pages/doctor/SignatureGate.jsx";
 import ConsultationsList from "./pages/doctor/ConsultationsList.jsx";
 import ConsultationView from "./pages/doctor/ConsultationView.jsx";
 import NotFound from "./pages/NotFound.jsx";
+import PharmacyApp from "./pages/pharmacy/PharmacyApp.jsx";
 import { usePatientAuth } from "./auth/PatientAuth.jsx";
 import { useDoctorAuth } from "./auth/DoctorAuth.jsx";
 
@@ -51,11 +52,12 @@ export default function App() {
     if (main) { main.setAttribute("tabindex", "-1"); main.focus({ preventScroll: true }); }
     window.scrollTo(0, 0);
     const section = pathname.includes("my-appointments") ? "My appointments" : pathname.includes("book-appointment") ? "Book an appointment" : pathname.includes("consultations") ? "Consultations" : pathname.includes("signature") || pathname.includes("profile") ? "Digital signature" : pathname.includes("login") ? "Sign in" : "Welcome";
-    document.title = `${section} | Sahayog Care`;
+    document.title = `${pathname === '/pharmacist/stock' ? 'Medicine stock' : section} | Sahayog Care`;
   }, [pathname]);
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/pharmacist/*" element={<PharmacyApp />} />
       <Route path="/patient/login" element={<PatientLogin />} />
 
       <Route

@@ -31,7 +31,16 @@ def load_draft(consultation_id: str) -> SoapDraft | None:
     return SoapDraft.model_validate({key: data[key] for key in SoapDraft.model_fields})
 
 
-def generate_draft(segments: list[dict], adapter=None) -> SoapDraft:
+def load_for_visit(visit):
+    if visit.get('soap_draft_key'):
+        data = storage.get_json(visit['soap_draft_key'], strict=True)
+        if not data:
+            raise storage.StorageError('Saved SOAP result is unavailable.')
+        return SoapDraft.model_validate(data['soap'])
+    return load_draft(visit['id'])
+
+
+def generate_draft(segments: list[dict], adapter=None, **prescription_options) -> SoapDraft:
     """Run translation and SOAP through the traced consultation graph."""
     from app.consultation.soap_graph import run_soap
-    return run_soap(segments, adapter)
+    return run_soap(segments, adapter, **prescription_options)

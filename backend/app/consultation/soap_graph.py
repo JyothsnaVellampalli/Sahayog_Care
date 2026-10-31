@@ -31,6 +31,7 @@ class State(TypedDict, total=False):
     turn_count: int
     translated_count: int
     excerpt_count: int
+    medicine_count: int
 
 
 @dataclass
@@ -40,6 +41,8 @@ class Payload:
     turns: list[dict] = field(default_factory=list)
     english: list[dict] = field(default_factory=list)
     draft: SoapDraft | None = None
+    medicines: list[dict] = field(default_factory=list)
+    on_prescription: object = None
 
 
 # Isolated per invocation, like the booking adapter context. Neither transcripts
@@ -122,12 +125,21 @@ def _check(state):
     return {"stage": "completed", "excerpt_count": sum(len(v) for v in p.draft.model_dump().values())}
     
 
+def _prescription(state):
+    from app.consultation.prescriptions import suggest
+    p = _PAYLOAD.get()
+    suggestions = suggest(p.draft, p.medicines)
+    if p.on_prescription:
+        p.on_prescription(suggestions)
+    return {'stage': 'prescription_review_ready', 'medicine_count': len(suggestions)}
+
+
 def build_graph():
     graph = StateGraph(State)
     previous = START
     for name, node in [("validate_input", _validate), ("deidentify", _deidentify),
                        ("translate_to_english", _translate), ("generate_soap", _soap),
-                       ("validate_soap", _check)]:
+                       ("validate_soap", _check), ("medicine_prescription", _prescription)]:
         graph.add_node(name, node)
         graph.add_edge(previous, name)
         previous = name
@@ -139,8 +151,8 @@ init_tracing()
 _GRAPH = build_graph()
 
 
-def run_soap(segments, adapter=None):
-    p = Payload(segments, adapter or get_adapter())
+def run_soap(segments, adapter=None, medicines=None, on_prescription=None):
+    p = Payload(segments, adapter or get_adapter(), medicines=medicines or [], on_prescription=on_prescription)
     token = _PAYLOAD.set(p)
     config = run_config()
     config.update(run_name="doctor_consultation_soap", tags=["doctor", "translation", "soap"], run_id=uuid4())

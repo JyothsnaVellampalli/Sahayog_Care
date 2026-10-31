@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import AppointmentEditor from "./AppointmentEditor.jsx";
+import PrescriptionList from '../../components/PrescriptionList.jsx';
 import { fetchAppointmentDetail } from "../../api.js";
 import { usePatientAuth } from "../../auth/PatientAuth.jsx";
 import { formatWhen, StatusPill } from "./MyAppointments.jsx";
@@ -29,6 +30,7 @@ export default function AppointmentDetail() {
     const a = appointment;
     const text = ["Sahayog Care - Consultation summary", formatWhen(a.starts_at), a.doctor_name,
       ...Object.entries(a.soap || {}).flatMap(([key, values]) => ["", key.toUpperCase(), ...(Array.isArray(values) ? values : [])]),
+      '', 'PRESCRIBED MEDICINES', ...(a.prescription || []).map(item => `${item.brand} - ${item.strength_form}: ${item.dose}, ${item.frequency}, ${item.duration}. Quantity: ${item.quantity ?? 'Not recorded'}. ${item.instructions || ''}`),
       "", `Signed by ${a.signed_by || a.doctor_name} on ${formatWhen(a.signed_at)}`].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = `consultation-${a.id}.txt`; link.click();
@@ -53,11 +55,11 @@ export default function AppointmentDetail() {
             <strong>{typeof s === "string" ? s : s.label || s.id}</strong>
             {typeof s === "object" && <><span className={`pill pill--${s.severity === "severe" ? "danger" : s.severity === "moderate" ? "warning" : "neutral"}`}>{s.severity || "Not recorded"}</span><span>{typeof s.duration_days === "number" ? `${s.duration_days} day(s)` : "Duration not recorded"}</span></>}
           </li>)}</ul> : <p className="detail__muted">No symptoms recorded.</p>}
-          {a.history && <p><strong>Your note:</strong> {a.history}</p>}
+          {a.symptom_text && <p><strong>Your note:</strong> {a.symptom_text}</p>}
           {a.status === "BOOKED" && <button className="btn btn--secondary" onClick={() => { setSaved(false); setParams({ edit: "1" }); }}>Edit details</button>}
           </>}
         </div></section>
-        <section className="detail__card"><h2>Medicines</h2><div className="detail__body"><p className="detail__muted">Under construction - a separate medicines list is not available yet. Any signed treatment instructions appear in the care plan below.</p></div></section>
+        <section className="detail__card"><h2>Medicines</h2><div className="detail__body">{a.signed_at ? <PrescriptionList items={a.prescription} /> : <p className="detail__muted">Prescribed medicines will appear after the doctor signs the consultation.</p>}</div></section>
         <section className="detail__card"><h2>Consultation</h2><div className="detail__body">
           <strong>What the doctor found</strong><Notes items={a.soap?.objective} empty="Consultation notes will appear after the doctor signs the summary." />
           {a.soap && <><strong>Care plan</strong><Notes items={a.soap.plan} empty="No plan recorded." /></>}

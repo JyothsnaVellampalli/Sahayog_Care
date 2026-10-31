@@ -102,13 +102,66 @@
 - The SOAP summary should be generated, saved. It should be viewed and allowed to edit by the doctor. After the doctor approval, the consulattaion has to be closed. 
 
 
-[ ] Phase 3 - Pharmacist Portal
+
+[x] Phase 3 - Data ingestion
 ### Goals
-- Data for pharmacy store.
-- UI to view, update data on selling.
+- The current data has multiple symptoms, multiple specalities. I wanted only few good specalities and cover all symptoms from mild to severe symptoms related to that specality listed in the symptoms list.
+- The specalities I wanted is - Cardiology, Orthopedics, Dermatology, gaestroentrology.
+- I have added symptoms data to `data/symptoms_2.json`. This list also connects severity to each symptom, so no need to new symptom_categories data. Clearly understand the symptoms_2.json and update both frontend and the backend model to use this data for severity check.
+- In appointments flow, make symptoms dropdown input as optional, patient can only enter the natual language text without selecting the symptom.
+- In appointement table, the patient written symptoms is added under history field, the field name is mis communicating the data stored. So, update the field name.
+- The legacy_consultation_id, allergies, vitals fields also looks irrelevant in the appointment table. So, remove those fields
+- Add the specality field in the appointemnts which can be null also, When the first symptoms categorisation done, this field can be filled(Use joins from the specalities table)
+- Remove all the appointments, consultations data as it will not suit for existing new symptoms data.
+
+### Done When
+- The new symptoms data has to be reflected in the application. 
+- The database tables data cleaning and the appointmet table updates should be done.
 
 
-[ ] Phase 4 - Notification engine
+
+[x] Phase 4 - Pharmacist Portal
+
+[x] Phase 4.1 - Data ingestion
+### Goals
+- Check the data in `pharmacy/data/medicines.json` and maintain the clean pharmacy data in postgres along with stock.
+- Show the stock UI in pharmacist portal with filters - brands, specality, compositions, stock.
+- Do simple login for pharmacist as we did for doctors, no authentication flow needed now.
+- Add two tabs in UI - 1. To view the stock with fiters. 2. The signed doctor consultations, where patient will reach pharmacy soon.
+
+### Done When
+- The medicines data is stored and the pharmacist portal shows the list with filters.
+
+
+[x] Phase 4.2
+### Goals
+- After SOAP generation, doctor should prescribe medicines. Doctor should select medicines from the list. 
+- Add filters like specality(based on doctors's profile) for fetching the medicines to show in UI which doctor selects.
+- Check the docs/Design folder for the doctor consultation screen's medicines UI.
+- Add this medicines prescription as a new node in the consultation graph.
+- The UI for the SOAP is not as per design `docs\Design\4. Doctor Consultation, listening, transcript, SOAP.png`, Fix the Ui for displaying SOAP.
+
+### Done When
+- In consultation screen, the SOAP UI is updated and the doctor can see the medicines suggested and can edit, add or remove the medicines and then sign the consultation.
+
+
+[x] Phase 4.3
+### Goals
+- Once the doctor prescribed the medicine and signed the consultation. The stock has to be locked for that consultation. Maintain the locked count column in the medicines table in database.
+- Pharmacist can check the closed consultation and if the patient did not come for medicines, he can unlock the stock after 24 hours. In UI show the red flag kind of thing, saying the consultation finished yesterday and stock is locked, but patient did not got the medicines.
+
+### Done When
+- The automatic lock for medicines on consultation.
+- The pharmacist can unlock the stock locked.
+
+
+
+[ ] Phase 5 - Memory
+### Goal
+- Add the langragph checkpointer for every consulatation as there are high chances that doctor speaks stops and then again may start speaking where the thread is same but some operations are happening again. Doctor may wait for some time to get some test like blood test or X-Ray done and then speaks and the generates SOAP. So maintain the check pointer for this. We are adding the converstaion to S3
+
+
+[ ] Phase 6 - Notification engine
 ### Goals
 - Add a new notification sender module.
 - Add handlers to send notification which can be used in multiple other modules for sending notifications.

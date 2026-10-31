@@ -82,7 +82,7 @@ def put_bytes(key: str, data: bytes, content_type: str | None = None) -> str:
                 Bucket=settings.s3_bucket, Key=_s3_key(key), Body=data, **extra
             )
         except Exception as exc:
-            response = getattr(exc, "response", {})
+            response = getattr(exc, "response", None) or {}
             code = response.get("Error", {}).get("Code", type(exc).__name__)
             logger.warning("S3 object save failed: %s", code)
             raise StorageError(f"S3 put failed for {key}: {exc}") from exc
@@ -98,7 +98,7 @@ def get_bytes(key: str, *, strict: bool = False) -> bytes | None:
             obj = _s3_client().get_object(Bucket=settings.s3_bucket, Key=_s3_key(key))
             return obj["Body"].read()
         except Exception as exc:
-            code = str(getattr(exc, "response", {}).get("Error", {}).get("Code", ""))
+            code = str((getattr(exc, "response", None) or {}).get("Error", {}).get("Code", ""))
             if strict and code not in ("NoSuchKey", "404", "NotFound"):
                 raise StorageError("Could not read stored object.") from exc
             return None

@@ -38,7 +38,8 @@ def list_specialties() -> list[dict]:
         .order("name")
         .execute()
     )
-    return res.data or []
+    from app.book_appointment.catalogue import SPECIALTY_CODES
+    return [s for s in (res.data or []) if s["code"] in SPECIALTY_CODES.values()]
 
 
 def doctors_by_specialty(specialty_id: str) -> list[dict]:

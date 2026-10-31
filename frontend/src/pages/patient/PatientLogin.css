@@ -9,6 +9,7 @@
 }
 
 .login__brand {
+  text-decoration: none;
   position: absolute;
   top: 28px;
   left: 32px;

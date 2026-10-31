@@ -8,6 +8,8 @@ An AI-assisted patient and doctor platform for a multi-hospital network.
 - [Workflow](docs/Workflow.md): phased delivery plan.
 - [Phase 1 progress](docs/Progress/Phase1.md): patient portal and booking.
 - [Phase 2 progress](docs/Progress/Phase2.md): doctor portal and consultation scribe.
+- [Phase 3 progress](docs/Progress/Phase3.md): symptom catalogue and appointment schema.
+- [Phase 4 progress](docs/Progress/Phase4.md): pharmacist portal, catalogue and stock.
 
 ## What works today
 
@@ -50,6 +52,24 @@ An AI-assisted patient and doctor platform for a multi-hospital network.
 
 Both graphs support optional LangSmith tracing. Signatures, transcripts, SOAP
 and signed snapshots use configured S3 storage or a local filesystem fallback.
+
+### Pharmacist portal
+
+- Open Pharmacist from the landing page and sign in with demo phone
+  `+919800000001` after the [Phase 4.1 setup](docs/Progress/Phase4.md#setup).
+- Browse 90 medicines / 166 brands with combined brand, specialty, composition
+  and stock filters. Random demo quantities are labelled; saved count updates
+  persist in PostgreSQL. Re-importing the catalogue preserves those counts.
+- Doctors review the SOAP summary and select medicines with explicit prescription
+  instructions and stock quantities. Signing freezes the prescription and reserves
+  its stock atomically; insufficient stock leaves the consultation open.
+- Pharmacists view frozen prescriptions, mark medicines collected, or unlock an
+  uncollected reservation after 24 hours. Overdue reservations are flagged, and
+  inventory shows available, reserved and total stock.
+- Apply the [Phase 4.3 migration](docs/Progress/Phase4.md#rollout-and-verification)
+  before running the updated signing and pharmacy flows.
+- Then apply the [consultation processing and prescription migrations](docs/Consultation-processing.md#deployment)
+  for background transcription/SOAP and Supabase prescription drafts.
 
 ## Tech stack
 

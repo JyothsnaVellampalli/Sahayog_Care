@@ -71,7 +71,7 @@ def database(monkeypatch):
             "id": "visit", "patient_id": "patient", "status": "BOOKED",
             "reason": "General Medicine - Severe", "severity": "Severe",
             "symptoms": [{"id": "S001", "label": "Headache", "duration_days": 2}],
-            "history": "Symptoms since yesterday", "created_at": "2026-10-28",
+            "symptom_text": "Symptoms since yesterday", "created_at": "2026-10-28",
             "patients": {"full_name": "Test Patient", "age": 42, "gender": "female"},
             "slots": {"doctor_id": "doctor", "starts_at": "2026-10-29T10:00:00Z",
                       "doctors": {"full_name": "Test Doctor", "specialties": {"name": "General Medicine"}}},
@@ -95,7 +95,7 @@ def test_both_portals_use_same_id_and_pending_emergencies_first(database):
     assert doctor_rows[1]["status"] == "SCHEDULED"
     assert doctor_rows[1]["symptoms"] == ["Headache"]
     assert doctor_rows[1]["patient_age"] == 42
-    assert doctor.get_consultation("visit")["history"] == "Symptoms since yesterday"
+    assert doctor.get_consultation("visit")["symptom_text"] == "Symptoms since yesterday"
     assert database.writes == []
 
 
@@ -124,10 +124,9 @@ def test_scope_filters_and_handled_emergency_disappears(database):
     assert database.bounds == [("gte", "slots.starts_at", "from"), ("lte", "slots.starts_at", "to")]
 
 
-def test_existing_storage_and_links_survive_migration(database):
-    database.rows["appointments"][0]["legacy_consultation_id"] = "old-visit"
-    assert doctor.storage_id("visit") == "old-visit"
-    assert doctor.get_consultation("old-visit")["id"] == "visit"
+def test_storage_uses_shared_id_and_missing_links_return_none(database):
+    assert doctor.storage_id("visit") == "visit"
+    assert doctor.get_consultation("old-visit") is None
 
 
 def test_consent_and_existing_visit_required(database):
@@ -148,7 +147,7 @@ def test_booking_uses_single_transaction_with_full_context():
                              [{"label": "Headache"}], "Severe", "History") == {"id": "visit"}
     assert calls[0][0] == "book_appointment"
     assert calls[0][1]["p_symptoms"] == [{"label": "Headache"}]
-    assert calls[0][1]["p_history"] == "History"
+    assert calls[0][1]["p_symptom_text"] == "History"
     assert calls[0][1]["p_idempotency_key"] == "retry-key"
 
 

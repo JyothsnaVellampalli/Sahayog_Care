@@ -8,7 +8,7 @@ from postgrest.exceptions import APIError
 from app import storage
 from app.config import settings
 from app.doctor import service as doctor_service
-from app.consultation import service, soap
+from app.consultation import service, soap, prescriptions, jobs, prescription_store
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ def signed_record(visit):
     record = storage.get_json(key, strict=True)
     if not isinstance(record, dict):
         raise storage.StorageError("Signed record is unavailable.")
+    record['prescription'] = prescription_store.load(visit['id']).get('items', [])
     return record
 
 
@@ -38,9 +39,10 @@ def close(consultation_id, doctor_id, draft: soap.SoapDraft):
     signature = storage.get_bytes(signature_key, strict=True)
     if not signature:
         raise service.ConsultationError("The uploaded signature is unavailable.")
-    object_id = visit.get("legacy_consultation_id") or visit["id"]
-    if soap.load_draft(object_id) is None:
+    object_id = visit["id"]
+    if soap.load_for_visit(visit) is None:
         raise service.ConsultationError("Generate and review a SOAP summary before signing.")
+    prescription = prescriptions.for_signing(object_id, doctor_id, draft)
     completed_at = datetime.now(timezone.utc).isoformat()
     mime = "image/png" if signature_key.lower().endswith(".png") else "image/jpeg"
     record = {"soap": draft.model_dump(mode="json"),
@@ -48,23 +50,25 @@ def close(consultation_id, doctor_id, draft: soap.SoapDraft):
               "signed_by": doctor_id, "doctor_name": doctor.get("full_name"),
               "signed_at": completed_at}
     if settings.show_speech_transcripts:
-        transcript = storage.get_json(f"transcripts/{object_id}.json", strict=True)
-        segments = transcript.get("segments", []) if isinstance(transcript, dict) else transcript or []
+        segments = jobs.load_transcript(visit)
         record["segments"] = segments
     # Unique key: competing requests and later draft writes cannot overwrite it.
     key = f"signed_consultations/{visit['id']}/{uuid4()}.json"
     storage.put_json(key, record)
     try:
-        result = service._admin().table("appointments").update({
-            "status": "COMPLETED", "completed_at": completed_at, "finalised_record_key": key,
-        }).eq("id", visit["id"]).eq("status", "IN_PROGRESS").execute()
+        result = service._admin().rpc('finalize_consultation_with_stock', {
+            'p_appointment_id': visit['id'], 'p_doctor_id': doctor_id,
+            'p_record_key': key, 'p_prescription': prescription,
+        }).execute()
     except APIError as exc:
         # Do not log provider details: constraint errors can include clinical rows.
         logger.warning("Signing database update failed (code=%s)", exc.code)
-        if exc.code in ("PGRST204", "42703"):
+        if exc.code == 'P0001':
+            raise service.ConsultationError(exc.message) from None
+        if exc.code in ("PGRST204", "PGRST202", "42703", "42883"):
             raise service.ConsultationServiceUnavailable(
-                "Signing database columns are unavailable. Apply "
-                "phase_2_2_signed_consultations.sql after the unified appointments "
+                "Signing database functions are unavailable. Apply "
+                "phase_4_3.sql after the Phase 4.1 "
                 "migration and reload the PostgREST schema cache."
             ) from None
         raise service.ConsultationServiceUnavailable(
@@ -73,4 +77,6 @@ def close(consultation_id, doctor_id, draft: soap.SoapDraft):
         ) from None
     if not result.data:
         raise service.ConsultationError("Consultation changed. Reload to see its saved status.")
-    return {**visit, "status": "COMPLETED", "completed_at": completed_at, "finalised_record_key": key}
+    saved = result.data
+    return {**visit, 'status': saved['status'], 'completed_at': saved['completed_at'],
+            'finalised_record_key': saved['finalised_record_key']}

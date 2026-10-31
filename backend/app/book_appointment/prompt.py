@@ -4,9 +4,9 @@ Jev is a decision model: it does not read a chat-style system/user prompt. It
 takes a ``state`` (the situation to decide on) and typed ``questions``. We put
 everything the model needs into ``state``:
 
-* the clinician-reviewed instructions from References/Categorise_symptom.txt,
-* the category reference buckets (from symptom_categories.json),
-* the allowed symptom list (from symptoms.json),
+* triage mapping derived from the Phase 3 catalogue,
+* the category reference buckets (from symptoms_2.json severity metadata),
+* the allowed symptom list (from symptoms_2.json),
 * the patient's input: selected symptoms (with severity/duration) and the
   de-identified free text, plus age / sex / pregnancy / duration.
 
@@ -17,8 +17,6 @@ probability (weightage) for each, and we pick the highest.
 from __future__ import annotations
 
 import json
-from functools import lru_cache
-from pathlib import Path
 
 from app.book_appointment.catalogue import (
     label_for,
@@ -26,10 +24,6 @@ from app.book_appointment.catalogue import (
     load_symptoms,
 )
 from app.book_appointment.schemas import Category, IntakeRequest
-
-# References/Categorise_symptom.txt lives at the repo root, two levels above app/.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_REFERENCE_FILE = _REPO_ROOT / "References" / "Categorise_symptom.txt"
 
 # The Choice question name and the criteria (category -> short description) that
 # Jev scores. Descriptions are kept brief; the detailed rules live in `state`.
@@ -63,21 +57,10 @@ CATEGORY_CRITERIA: dict[str, str] = {
 }
 
 
-@lru_cache(maxsize=1)
-def _reference_instructions() -> str:
-    """The clinician-reviewed triage rules used as decision guidance."""
-    if _REFERENCE_FILE.exists():
-        return _REFERENCE_FILE.read_text(encoding="utf-8").strip()
-    return (
-        "Classify the patient's condition as Emergency, Severe, or Normal based "
-        "on the symptoms and text. Emergency beats Severe beats Normal."
-    )
-
-
 def _format_symptom_list() -> str:
     """Render the allowed symptom list (id, label, weight) for the state."""
     return "\n".join(
-        f'{s["id"]}\t{s["label"]}\t(weight {s["weight"]})' for s in load_symptoms()
+        f'{s["id"]}\t{s["label"]}\t{s["specialty"]}\t{s["severity"]}\t(weight {s["weight"]})' for s in load_symptoms()
     )
 
 
@@ -137,7 +120,11 @@ def build_state(request: IntakeRequest, deidentified_text: str) -> str:
     """
     return (
         "TRIAGE RULES:\n"
-        f"{_reference_instructions()}\n\n"
+        "Emergency beats Severe beats Normal. Catalogue emergency maps to Emergency; "
+        "severe maps to Severe; mild and moderate map to Normal unless context escalates. "
+        "Catalogue severity is a minimum for explicitly selected symptoms. Patient-rated "
+        "intensity must not downgrade it. Detect red flags in free text even outside the "
+        "catalogue. Do not infer a symptom from a negated statement.\n\n"
         "CATEGORY REFERENCE (higher symptom weight = more severe):\n"
         f"{_format_category_buckets()}\n\n"
         "SYMPTOM_LIST (id, label, weight):\n"
@@ -154,7 +141,7 @@ SPECIALTY_INSTRUCTIONS = (
     MULTILINGUAL_INSTRUCTIONS +
     "Based on the patient's symptoms and text in the state, choose the single "
     "medical specialty whose doctor is the best first point of care. If no "
-    "specialty clearly fits, prefer General Medicine."
+    "specialty clearly fits, choose Outside supported specialties. Never force an unrelated match."
 )
 
 
@@ -195,4 +182,5 @@ def build_specialty_state(
 
 def specialty_criteria(specialties: list[dict]) -> dict[str, str]:
     """Build the Choice criteria (specialty name -> description) from the DB."""
-    return {s["name"]: (s.get("description") or s["name"]) for s in specialties}
+    return {**{s["name"]: (s.get("description") or s["name"]) for s in specialties},
+            "Outside supported specialties": "No supported specialty is an appropriate match"}
