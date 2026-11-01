@@ -35,7 +35,7 @@ export default function MyAppointments() {
   });
   return <section className="ma">
     <div className="ma__header"><div><h1 className="ma__heading">My appointments</h1>
-      <p className="ma__intro">Select an appointment to see its symptoms, consultation notes and summary.</p></div>
+      <p className="ma__intro">Select an appointment to see its symptoms, appointment notes and summary.</p></div>
       <div className="ma__filters" role="group" aria-label="Filter appointments">
         {["all", "upcoming", "past"].map(value => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setParams(value === "all" ? {} : { filter: value })}>{value}</button>)}
       </div>

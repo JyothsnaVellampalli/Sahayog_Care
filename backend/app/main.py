@@ -21,6 +21,7 @@ from app.consultation.router import router as consultation_router
 from app.patient.router import router as patient_router
 from app.pharmacy.router import router as pharmacy_router
 from app.consultation.jobs import worker
+from app.care_records import router as care_records_router
 
 
 @asynccontextmanager
@@ -53,6 +54,7 @@ app.include_router(patient_router)
 app.include_router(doctor_router)
 app.include_router(consultation_router)
 app.include_router(pharmacy_router)
+app.include_router(care_records_router)
 
 
 @app.get("/api/settings", tags=["settings"])

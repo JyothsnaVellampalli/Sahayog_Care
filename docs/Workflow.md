@@ -155,6 +155,30 @@
 - The pharmacist can unlock the stock locked.
 
 
+[x] Phase 6 - Followup appointment
+### Goals
+- Add a checkbox in the symptoms tab for follow up consulattion.
+- If patient checked the follow-up consulattion, show him the list of his appointments and ask t select the one that is related to this and make the appoiontment record with `linked-appointment` as the previous related appointment.
+- This process should make both patient and doctor track through their consultations for the same reason.
+- A patient can start neew appoiointment or follow-up appointment.
+- In doctors consultation screen, show the link to last related conbsulattion done for this consulattion, on clicking link, a new tab should open with the previous consulattion opened.
+- Do DB record, UI linking only and no other extra AI related summarisations is required.
+- Add a helpdesk portal, where helpdesk person can see all appointments irrespective of patient and doctor. Add fileters like doctor, specality, day and time.
+- Here the helpdesk person can open the apointment and can see the information - show a consulation screen with out any input actions UI like speech, add medicines, only data can see in the same styles as doctor.
+- In consultation screen, add a reports button on the top-right corner of the speech design, where doctor ot frontdesk person can access and patient can also see the reports in the patient portal.
+- On clicking the reports, a popup should open with all the reports added as a carousel and the add report button should be shown. Reports can be in pdf or images format.
+- Keep the reports UI clean and blending with application design.
+
+### Done When
+- A follow-up consulation record is recorded with the previous linked appointment/consulttaion and can be viewed in UI.
+- A reports UI for doctor and helpdesk portal and patient can only view the reports.
+
+### Implementation
+- Shared `appointments.linked_appointment_id`, atomic booking validation and emergency intake link preservation.
+- Patient appointment links; doctor/helpdesk consultation links open the preceding related visit in a new tab.
+- Helpdesk filters and read-only clinical view; shared PDF/image reports carousel with staff upload and patient view/download.
+- Migration, access rules and verification: see `docs/Phase6.md`.
+
 
 [ ] Phase 5 - Memory
 ### Goal

@@ -195,6 +195,7 @@ def _emergency(state: IntakeState) -> dict[str, Any]:
                 deidentified_text=state.get("deidentified_text", ""),
                 scores=(classification.scores if classification else {}),
                 specialty=state.get("specialty"),
+                **({"linked_appointment_id": str(request.linked_appointment_id)} if request.linked_appointment_id else {}),
             )
             if saved is None:
                 raise RuntimeError("Emergency was not saved")

@@ -8,6 +8,7 @@ both the API boundary and the graph boundary.
 from __future__ import annotations
 
 from enum import Enum
+from uuid import UUID
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -50,6 +51,7 @@ class IntakeRequest(BaseModel):
         default=None, max_length=4000, description="Optional free-text detail"
     )
     patient_id: str | None = Field(default=None, description="Logged-in patient id")
+    linked_appointment_id: UUID | None = None
     age: int | None = Field(default=None, ge=0, le=120)
     sex: Literal["female", "male", "other", "unknown"] | None = None
     pregnant: bool | None = None

@@ -7,13 +7,15 @@ def symptom_labels(symptoms):
 
 
 def book(client, patient_id, slot_id, reason, idempotency_key,
-         symptoms=None, severity=None, symptom_text=None, emergency_intake_id=None, specialty_id=None):
+         symptoms=None, severity=None, symptom_text=None, emergency_intake_id=None, specialty_id=None,
+         linked_appointment_id=None):
     """Reserve the slot and insert the visit in one database transaction."""
     result = client.rpc("book_appointment", {
         "p_patient_id": patient_id, "p_slot_id": slot_id,
         "p_reason": reason, "p_idempotency_key": idempotency_key,
         "p_symptoms": symptoms or [], "p_severity": severity,
         "p_specialty_id": specialty_id, "p_symptom_text": symptom_text, "p_emergency_intake_id": emergency_intake_id,
+        **({"p_linked_appointment_id": linked_appointment_id} if linked_appointment_id else {}),
     }).execute()
     return result.data
 
@@ -33,7 +35,7 @@ def doctor_view(row):
     return {
         **{k: row.get(k) for k in (
             "id", "severity", "symptom_text", "specialty_id", "transcript_key",
-            "started_at", "patient_id", "completed_at",
+            "started_at", "patient_id", "completed_at", "linked_appointment_id",
             "finalised_record_key", "soap_draft_key")},
         "type": "appointment",
         "status": "SCHEDULED" if row.get("status") == "BOOKED" else row.get("status"),

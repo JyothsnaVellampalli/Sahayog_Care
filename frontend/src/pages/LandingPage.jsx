@@ -40,11 +40,11 @@ const PROFILES = [
   },
   {
     id: "front-desk",
-    label: "Front desk",
+    label: "Helpdesk",
     initial: "F",
     color: "var(--color-neutral)",
-    description: "Help patients and manage appointments.",
-    ready: false,
+    description: "View consultations and manage reports.",
+    ready: true,
   },
 ];
 
@@ -52,6 +52,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
 
   function handleSelect(profile) {
+    if (profile.id === 'front-desk') navigate('/helpdesk/login');
     if (profile.id === "pharmacist") navigate("/pharmacist/login");
     if (profile.id === "patient") {
       navigate("/patient/login");

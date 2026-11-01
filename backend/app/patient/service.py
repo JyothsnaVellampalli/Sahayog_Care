@@ -272,20 +272,21 @@ def list_appointments(patient_id: str) -> list[dict]:
 
 
 def create_appointment(patient_id, slot_id, reason, idempotency_key,
-                       symptoms=None, severity=None, symptom_text=None, specialty_id=None):
+                       symptoms=None, severity=None, symptom_text=None, specialty_id=None, linked_appointment_id=None):
     """Create the shared visit and reserve its slot atomically."""
     from app import appointments
     from app.book_appointment.deidentify import deidentify
     return appointments.book(_require_admin(), patient_id, slot_id, reason,
                              idempotency_key, symptoms, severity,
-                             deidentify(symptom_text).text if symptom_text else None, specialty_id=specialty_id)
+                             deidentify(symptom_text).text if symptom_text else None, specialty_id=specialty_id,
+                             linked_appointment_id=linked_appointment_id)
 
 
 def appointment_detail(patient_id: str, appointment_id: str) -> dict | None:
     """Patient view of a visit; only signed clinical notes are released."""
     client = _require_admin()
     rows = client.table("appointments").select(
-        "id, status, reason, symptoms, symptom_text, completed_at, finalised_record_key, specialty_id, specialties(name), "
+        "id, status, reason, symptoms, symptom_text, linked_appointment_id, completed_at, finalised_record_key, specialty_id, specialties(name), "
         "slots(starts_at, doctors(full_name, specialties(name)))"
     ).eq("patient_id", patient_id).eq("id", appointment_id).limit(1).execute().data
     if not rows:
@@ -293,7 +294,7 @@ def appointment_detail(patient_id: str, appointment_id: str) -> dict | None:
     row = rows[0]
     slot = row.get("slots") or {}
     doctor = slot.get("doctors") or {}
-    result = {key: row.get(key) for key in ("id", "status", "reason", "symptoms", "symptom_text", "completed_at")}
+    result = {key: row.get(key) for key in ("id", "status", "reason", "symptoms", "symptom_text", "completed_at", "linked_appointment_id")}
     result.update(starts_at=slot.get("starts_at"), doctor_name=doctor.get("full_name"),
                   specialty=(row.get("specialties") or {}).get("name"), soap=None)
     if row.get("status") == "COMPLETED" and row.get("finalised_record_key"):
@@ -314,6 +315,7 @@ def create_emergency_intake(
     deidentified_text: str,
     scores: dict,
     specialty: dict | None = None,
+    linked_appointment_id: str | None = None,
 ) -> dict | None:
     """Record an emergency case. Returns the row, or None if DB is unavailable.
 
@@ -330,6 +332,7 @@ def create_emergency_intake(
         "category": "Emergency",
         "scores": scores or {},
         "specialty": specialty,
+        **({"linked_appointment_id": linked_appointment_id} if linked_appointment_id else {}),
     }
     res = client.table("emergency_intakes").insert(row).execute()
     return (res.data or [None])[0]

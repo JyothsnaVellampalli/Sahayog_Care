@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 
 from app.book_appointment.catalogue import load_symptoms, symptom_index
@@ -48,13 +48,15 @@ def list_symptoms() -> SymptomListResponse:
 
 
 @router.post("/appointments/intake", response_model=IntakeResponse)
-def appointment_intake(request: IntakeRequest) -> IntakeResponse:
+def appointment_intake(request: IntakeRequest, authorization: str | None = Header(default=None)) -> IntakeResponse:
     """Run the booking intake flow: de-identify, then categorise the condition.
 
     Input is validated by Pydantic at the boundary (PRD section 9). The response
     carries the classification (Emergency / Severe / Normal), and for a
     non-emergency, the matched specialty with doctors and their open slots.
     """
+    if request.linked_appointment_id:
+        _validate_followup(request.patient_id, str(request.linked_appointment_id), authorization)
     if not request.symptoms and not request.free_text:
         raise HTTPException(422, "Select a symptom or describe what you are experiencing.")
     if any(s.symptom_id not in symptom_index() for s in request.symptoms):
@@ -71,6 +73,7 @@ class BookSlotRequest(BaseModel):
     severity: Literal["Normal", "Severe", "Need more information"] | None = None
     symptom_text: str | None = Field(default=None, max_length=4000)
     specialty_id: UUID | None = None
+    linked_appointment_id: UUID | None = None
 
 
 class BookSlotResponse(BaseModel):
@@ -82,7 +85,9 @@ class BookSlotResponse(BaseModel):
 
 
 @router.post("/appointments/book", response_model=BookSlotResponse)
-def book_appointment_slot(request: BookSlotRequest) -> BookSlotResponse:
+def book_appointment_slot(request: BookSlotRequest, authorization: str | None = Header(default=None)) -> BookSlotResponse:
+    if request.linked_appointment_id:
+        _validate_followup(str(request.patient_id), str(request.linked_appointment_id), authorization)
     canonical = []
     for selected in request.symptoms:
         symptom = symptom_index().get(selected.get("id"))
@@ -98,6 +103,7 @@ def book_appointment_slot(request: BookSlotRequest) -> BookSlotResponse:
             reason=request.reason, idempotency_key=str(request.idempotency_key),
             symptoms=canonical, severity=severity, symptom_text=request.symptom_text,
             specialty_id=str(request.specialty_id) if request.specialty_id else None,
+            **({"linked_appointment_id": str(request.linked_appointment_id)} if request.linked_appointment_id else {}),
         )
     except patient_service.PatientServiceUnavailable:
         raise HTTPException(status_code=503, detail="Booking service unavailable.") from None
@@ -105,3 +111,12 @@ def book_appointment_slot(request: BookSlotRequest) -> BookSlotResponse:
         raise HTTPException(status_code=409, detail="Could not book this slot. Refresh availability and retry.") from None
     return BookSlotResponse(ok=True, slot_id=str(request.slot_id),
                             status=appt["status"], appointment_id=appt["id"])
+
+
+def _validate_followup(patient_id, linked_id, authorization):
+    from app.patient.router import _verify_patient
+    _verify_patient(patient_id, authorization)
+    rows = patient_service._require_admin().table('appointments').select('id').eq(
+        'id', linked_id).eq('patient_id', patient_id).eq('status', 'COMPLETED').execute().data
+    if not rows:
+        raise HTTPException(422, 'Choose one of your completed appointments for follow-up.')

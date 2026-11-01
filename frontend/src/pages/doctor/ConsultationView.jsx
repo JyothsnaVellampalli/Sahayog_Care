@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import Reports from '../../components/Reports.jsx';
+import PrescriptionList from '../../components/PrescriptionList.jsx';
 import {
   appendTranscriptSegment,
   editTranscriptSegment,
@@ -111,7 +113,7 @@ function ConsultationContent() {
     fetchSoap(consultationId).then((saved) => {
       if (!active || revision !== soapRevision.current) return;
       setSoap(saved.soap);
-      setSigned(saved.signature ? saved : null);
+      setSigned(saved.signed_at ? saved : null);
       setSoapLoaded(true);
     }).catch((err) => { if (active) setSoapError(err.message); });
     return () => { active = false; };
@@ -358,6 +360,10 @@ function ConsultationContent() {
       </div>
 
       {/* Recorder panel */}
+      <div className="record-tools">
+        {detail.linked_appointment_id && <Link to={`/doctor/consultations/${detail.linked_appointment_id}`} target="_blank" rel="noopener noreferrer">Previous related consultation ↗</Link>}
+        <Reports appointmentId={consultationId} doctorId={doctor.id} canUpload={doctor.id === detail.doctor_id} />
+      </div>
       {!closed && <div className="cview__scribe">
         {!started ? (
           <div className="cview__consent-block">
@@ -619,7 +625,8 @@ function ConsultationContent() {
           <button disabled={soapBusy} className="btn btn--primary" onClick={applySummaryEdits}>Apply edits</button>
         </div>}
       </div>
-      {detail && started && <PrescriptionEditor consultationId={consultationId} doctorId={doctor.id}
+      {closed && started && <div className="cview__soap"><h2>Medicines</h2><PrescriptionList items={signed?.prescription || []} /></div>}
+      {detail && started && !closed && <PrescriptionEditor consultationId={consultationId} doctorId={doctor.id}
         soap={soap} closed={closed} onReady={setPrescriptionReady} processing={soapBusy || sarvam.busy}
         locked={signing || !started || doctor.id !== detail.doctor_id} />}
       {closed && signed?.signature && <div className="cview__signature">

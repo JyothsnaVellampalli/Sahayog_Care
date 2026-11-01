@@ -50,16 +50,18 @@ export function pharmacyResolveReservation(pharmacistId, appointmentId, action) 
     { method: 'POST', body: JSON.stringify({ action }) });
 }
 
-export function submitIntake(payload) {
+export function submitIntake(payload, accessToken) {
   return request("/api/appointments/intake", {
     method: "POST",
+    ...(accessToken ? { headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` } } : {}),
     body: JSON.stringify(payload),
   });
 }
 
-export function bookSlot({ slotId, patientId, reason, idempotencyKey, symptoms, severity, symptom_text, specialtyId }) {
+export function bookSlot({ slotId, patientId, reason, idempotencyKey, symptoms, severity, symptom_text, specialtyId, linkedAppointmentId, accessToken }) {
   return request("/api/appointments/book", {
     method: "POST",
+    ...(accessToken ? { headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` } } : {}),
     body: JSON.stringify({
       slot_id: slotId,
       patient_id: patientId ?? null,
@@ -69,8 +71,29 @@ export function bookSlot({ slotId, patientId, reason, idempotencyKey, symptoms, 
       severity,
       symptom_text,
       specialty_id: specialtyId ?? null,
+      linked_appointment_id: linkedAppointmentId || null,
     }),
   });
+}
+
+export function helpdeskIdentify(phone) {
+  return request('/api/helpdesk/identify', { method: 'POST', body: JSON.stringify({ phone }) });
+}
+export function helpdeskGet(staffId, path, params = {}) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null));
+  return request(`/api/helpdesk/${encodeURIComponent(staffId)}/${path}?${qs}`);
+}
+export function fetchReports(appointmentId, headers) {
+  return request(`/api/records/${encodeURIComponent(appointmentId)}/reports`, { headers });
+}
+export function uploadReport(appointmentId, headers, file, title) {
+  const form = new FormData(); form.append('file', file); form.append('title', title);
+  return request(`/api/records/${encodeURIComponent(appointmentId)}/reports`, { method: 'POST', headers, body: form });
+}
+export async function reportBlob(appointmentId, reportId, headers, signal) {
+  const response = await fetch(`${API_BASE_URL}/api/records/${encodeURIComponent(appointmentId)}/reports/${encodeURIComponent(reportId)}/file`, { headers, signal });
+  if (!response.ok) throw new Error('Could not load the report file. Please retry.');
+  return response.blob();
 }
 
 // --- Patient auth (Phase 1.4) ---

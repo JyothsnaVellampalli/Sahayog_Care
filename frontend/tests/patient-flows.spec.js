@@ -90,7 +90,7 @@ for (const width of [1440, 390, 320]) {
     await accessible(page);
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download summary' }).click();
-    expect((await download).suggestedFilename()).toBe('consultation-past.txt');
+    expect((await download).suggestedFilename()).toBe('appointment-past.txt');
     await page.screenshot({ path: `test-results/detail-${width}.png`, fullPage: true });
     await page.getByRole('link', { name: 'Book follow-up' }).click();
     await expect(page).toHaveURL(/book-appointment/);

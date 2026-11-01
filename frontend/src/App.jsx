@@ -13,6 +13,7 @@ import ConsultationsList from "./pages/doctor/ConsultationsList.jsx";
 import ConsultationView from "./pages/doctor/ConsultationView.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import PharmacyApp from "./pages/pharmacy/PharmacyApp.jsx";
+import HelpdeskApp from './pages/helpdesk/HelpdeskApp.jsx';
 import { usePatientAuth } from "./auth/PatientAuth.jsx";
 import { useDoctorAuth } from "./auth/DoctorAuth.jsx";
 
@@ -58,6 +59,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/pharmacist/*" element={<PharmacyApp />} />
+      <Route path="/helpdesk/*" element={<HelpdeskApp />} />
       <Route path="/patient/login" element={<PatientLogin />} />
 
       <Route

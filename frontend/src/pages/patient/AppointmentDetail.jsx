@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import AppointmentEditor from "./AppointmentEditor.jsx";
 import PrescriptionList from '../../components/PrescriptionList.jsx';
+import Reports from '../../components/Reports.jsx';
 import { fetchAppointmentDetail } from "../../api.js";
 import { usePatientAuth } from "../../auth/PatientAuth.jsx";
 import { formatWhen, StatusPill } from "./MyAppointments.jsx";
@@ -28,12 +29,12 @@ export default function AppointmentDetail() {
   }, [patient.id, appointmentId, accessToken, retry]);
   function downloadSummary() {
     const a = appointment;
-    const text = ["Sahayog Care - Consultation summary", formatWhen(a.starts_at), a.doctor_name,
+    const text = ["Sahayog Care - Appointment summary", formatWhen(a.starts_at), a.doctor_name,
       ...Object.entries(a.soap || {}).flatMap(([key, values]) => ["", key.toUpperCase(), ...(Array.isArray(values) ? values : [])]),
       '', 'PRESCRIBED MEDICINES', ...(a.prescription || []).map(item => `${item.brand} - ${item.strength_form}: ${item.dose}, ${item.frequency}, ${item.duration}. Quantity: ${item.quantity ?? 'Not recorded'}. ${item.instructions || ''}`),
       "", `Signed by ${a.signed_by || a.doctor_name} on ${formatWhen(a.signed_at)}`].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-    const link = document.createElement("a"); link.href = url; link.download = `consultation-${a.id}.txt`; link.click();
+    const link = document.createElement("a"); link.href = url; link.download = `appointment-${a.id}.txt`; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   const a = appointment;
@@ -48,6 +49,10 @@ export default function AppointmentDetail() {
         <dl><dt>Reason</dt><dd>{a.reason || "Not provided"}</dd></dl>
         <StatusPill status={a.status} />
       </div>
+      <div className="record-tools">
+          {a.linked_appointment_id && <Link to={`/patient/my-appointments/${a.linked_appointment_id}`} target="_blank" rel="noopener noreferrer">Previous related appointment ↗</Link>}
+          <Reports appointmentId={a.id} patientId={patient.id} accessToken={accessToken} />
+        </div>
       <div className="detail__grid">
         <section className="detail__card"><h2>Symptoms</h2><div className="detail__body">
           {a.status === "BOOKED" && params.get("edit") === "1" ? <AppointmentEditor appointment={a} patientId={patient.id} accessToken={accessToken} onCancel={() => setParams({})} onSaved={() => { setSaved(true); setParams({}); setRetry(retry + 1); }} /> : <>
@@ -59,16 +64,16 @@ export default function AppointmentDetail() {
           {a.status === "BOOKED" && <button className="btn btn--secondary" onClick={() => { setSaved(false); setParams({ edit: "1" }); }}>Edit details</button>}
           </>}
         </div></section>
-        <section className="detail__card"><h2>Medicines</h2><div className="detail__body">{a.signed_at ? <PrescriptionList items={a.prescription} /> : <p className="detail__muted">Prescribed medicines will appear after the doctor signs the consultation.</p>}</div></section>
-        <section className="detail__card"><h2>Consultation</h2><div className="detail__body">
-          <strong>What the doctor found</strong><Notes items={a.soap?.objective} empty="Consultation notes will appear after the doctor signs the summary." />
+        <section className="detail__card"><h2>Medicines</h2><div className="detail__body">{a.signed_at ? <PrescriptionList items={a.prescription} /> : <p className="detail__muted">Prescribed medicines will appear after the doctor signs the appointment summary.</p>}</div></section>
+        <section className="detail__card"><h2>Appointment notes</h2><div className="detail__body">
+          <strong>What the doctor found</strong><Notes items={a.soap?.objective} empty="Appointment notes will appear after the doctor signs the summary." />
           {a.soap && <><strong>Care plan</strong><Notes items={a.soap.plan} empty="No plan recorded." /></>}
           {a.signed_at && <p className="detail__muted">Signed by {a.signed_by || a.doctor_name} on {formatWhen(a.signed_at)}</p>}
         </div></section>
         <section className="detail__card"><h2>Summary</h2><div className="detail__body">
           <Notes items={a.soap?.assessment} empty="Your signed summary is not available yet." />
           <div className="detail__actions">{a.soap && <button className="btn btn--secondary" onClick={downloadSummary}>Download summary</button>}
-          <Link className="btn btn--primary" to="/patient/book-appointment">Book follow-up</Link></div>
+          {a.status === 'COMPLETED' && <Link className="btn btn--primary" to={`/patient/book-appointment?followup=${a.id}`}>Book follow-up</Link>}</div>
         </div></section>
       </div>
     </>}

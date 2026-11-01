@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { bookSlot, fetchSymptoms, submitIntake } from "../../api.js";
+import { Link, useSearchParams } from "react-router-dom";
+import { bookSlot, fetchSymptoms, submitIntake, fetchAppointments } from "../../api.js";
 import SymptomMultiSelect from "../../components/SymptomMultiSelect.jsx";
 import { usePatientAuth } from "../../auth/PatientAuth.jsx";
 import "./BookAppointment.css";
@@ -32,7 +32,23 @@ function formatSlot(iso) {
 
 
 export default function BookAppointment() {
-  const { patient } = usePatientAuth();
+  const { patient, accessToken } = usePatientAuth();
+  const [params] = useSearchParams();
+  const [followup, setFollowup] = useState(Boolean(params.get('followup')));
+  const [linkedId, setLinkedId] = useState(params.get('followup') || '');
+  const [previous, setPrevious] = useState([]);
+  const [historyError, setHistoryError] = useState('');
+  const [historyRetry, setHistoryRetry] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  useEffect(() => {
+    if (!followup) return;
+    let active = true; setHistoryLoading(true); setHistoryError('');
+    fetchAppointments(patient.id).then(data => {
+      if (active) setPrevious((data.appointments || []).filter(a => a.type !== 'emergency' && a.status === 'COMPLETED'));
+    }).catch(err => { if (active) setHistoryError(err.message); })
+      .finally(() => { if (active) setHistoryLoading(false); });
+    return () => { active = false; };
+  }, [followup, patient.id, historyRetry]);
   const [activeTab, setActiveTab] = useState("symptoms");
   const slotTabRef = useRef(null);
   useEffect(() => {
@@ -55,13 +71,14 @@ export default function BookAppointment() {
       const draft = JSON.parse(sessionStorage.getItem(draftKey) || "null");
       if (draft && Array.isArray(draft.selectedIds) && draft.details && typeof draft.freeText === "string") {
         setSelectedIds(draft.selectedIds); setDetails(draft.details); setFreeText(draft.freeText);
+        if (!params.get('followup')) { setFollowup(Boolean(draft.linkedId)); setLinkedId(draft.linkedId || ''); }
         setDraftStatus("Saved draft restored.");
       }
     } catch { setDraftStatus("The saved draft could not be restored."); }
   }, [draftKey]);
   function saveDraft() {
     try {
-      sessionStorage.setItem(draftKey, JSON.stringify({ selectedIds, details, freeText }));
+      sessionStorage.setItem(draftKey, JSON.stringify({ selectedIds, details, freeText, linkedId: followup ? linkedId : '' }));
       setDraftStatus("Draft saved for this browser tab.");
     } catch { setDraftStatus("Could not save the draft. Please keep this page open."); }
   }
@@ -136,6 +153,7 @@ export default function BookAppointment() {
     try {
       const payload = {
         patient_id: patient?.id ?? null,
+        linked_appointment_id: followup ? linkedId : null,
         symptoms: selectedIds.map((id) => ({
           symptom_id: id,
 
@@ -148,7 +166,7 @@ export default function BookAppointment() {
         free_text: freeText || null,
         // Age and gender come from the patient profile (Phase 1.4), not the form.
       };
-      const data = await submitIntake(payload);
+      const data = await submitIntake(payload, accessToken);
       if (requestedLocationVersion !== locationVersion.current && data.outcome !== "emergency") return;
       setResult(data);
       setActiveTab("slots");
@@ -160,7 +178,7 @@ export default function BookAppointment() {
   }
 
   const canSubmit =
-    !submitting && (selectedIds.length > 0 || freeText.trim().length > 0);
+    !submitting && (!followup || (!historyLoading && !historyError && previous.some(a => a.id === linkedId))) && (selectedIds.length > 0 || freeText.trim().length > 0);
 
   if (loading)
     return (
@@ -180,7 +198,7 @@ export default function BookAppointment() {
     <section className="ba">
       <h1 className="ba__heading">Book an appointment</h1>
       <p className="ba__intro">
-        Tell us what you're experiencing. This helps the doctor prepare before your consultation.
+        Tell us what you're experiencing. This helps the doctor prepare before your appointment.
       </p>
 
       <div className="ba__tabs" role="tablist" aria-label="Booking steps" onKeyDown={(event) => {
@@ -196,6 +214,17 @@ export default function BookAppointment() {
       <div role="tabpanel" id="booking-panel-symptoms" aria-labelledby="booking-tab-symptoms" hidden={activeTab !== "symptoms"}>
       <form className="ba" onSubmit={handleSubmit}>
       <fieldset className="ba__card" disabled={submitting}>
+      <div className="ba__row followup-choice">
+        <label><input type="checkbox" checked={followup} onChange={e => { setFollowup(e.target.checked); setResult(null); }} /> This is a follow-up appointment</label>
+        {followup && <>
+          <label className="ba__label" htmlFor="related-appointment">Previous appointment</label>
+          <select id="related-appointment" value={linkedId} disabled={historyLoading} onChange={e => { setLinkedId(e.target.value); setResult(null); }}>
+            <option value="">Choose a completed appointment</option>
+            {previous.map(a => <option key={a.id} value={a.id}>{formatSlot(a.starts_at)} — {a.doctor_name} — {a.reason || 'Appointment'}</option>)}
+          </select>
+          {historyLoading ? <p role="status">Loading previous appointments...</p> : historyError ? <div role="alert">{historyError} <button type="button" onClick={() => setHistoryRetry(historyRetry + 1)}>Retry</button></div> : !previous.length && <p>No completed appointments yet. You can book a new appointment.</p>}
+        </>}
+      </div>
       {/* Row 1: searchable multi-select */}
       <div className="ba__row">
         <SymptomMultiSelect
@@ -281,13 +310,13 @@ export default function BookAppointment() {
       </form>
       </div>
       <div role="tabpanel" id="booking-panel-slots" aria-labelledby="booking-tab-slots" hidden={activeTab !== "slots"}>
-        {result && <IntakeResult result={result} />}
+        {result && <IntakeResult key={followup ? linkedId : 'new'} result={result} linkedId={followup ? linkedId : null} />}
       </div>
     </section>
   );
 }
 
-function IntakeResult({ result }) {
+function IntakeResult({ result, linkedId }) {
   return (
     <section className="ba__result" aria-labelledby="ba-result-heading">
       <h2 className="ba__result-heading" id="ba-result-heading">Slot booking</h2>
@@ -300,7 +329,7 @@ function IntakeResult({ result }) {
 
       {/* Non-emergency: specialty + doctor/slot selection. */}
       {result.outcome === "emergency" && result.specialty?.name && <p>Suggested specialty: <strong>{result.specialty.name}</strong></p>}
-      {result.outcome === "booking" && <BookingSection result={result} />}
+      {result.outcome === "booking" && <BookingSection result={result} linkedId={linkedId} />}
 
       {result.note && <p className="ba__note">{result.note}</p>}
 
@@ -314,8 +343,8 @@ function IntakeResult({ result }) {
   );
 }
 
-function BookingSection({ result }) {
-  const { patient } = usePatientAuth();
+function BookingSection({ result, linkedId }) {
+  const { patient, accessToken } = usePatientAuth();
   const [bookedSlotId, setBookedSlotId] = useState(null);
   const [bookingError, setBookingError] = useState(null);
   const [pendingSlot, setPendingSlot] = useState(null);
@@ -339,6 +368,7 @@ function BookingSection({ result }) {
         severity: category,
         specialtyId: result.specialty?.id,
         symptom_text: result.deidentified_text,
+        linkedAppointmentId: linkedId, accessToken,
       });
       if (res.ok) {
         try { sessionStorage.removeItem("sahayog.intake.v3.draft." + patient?.id); } catch {}

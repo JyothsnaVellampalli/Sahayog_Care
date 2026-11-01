@@ -65,6 +65,7 @@ def consultations(
 
 class ConsultationDetail(BaseModel):
     id: str
+    linked_appointment_id: str | None = None
     status: str | None = None
     severity: str | None = None
     symptoms: list = Field(default_factory=list)
