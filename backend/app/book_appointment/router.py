@@ -12,6 +12,7 @@ shape, so only app.book_appointment.catalogue would change.)
 
 from __future__ import annotations
 
+import logging
 from typing import Literal
 from uuid import UUID
 
@@ -24,6 +25,7 @@ from app.book_appointment.schemas import IntakeRequest, IntakeResponse
 from app.patient import service as patient_service
 
 router = APIRouter(prefix="/api", tags=["book_appointment"])
+logger = logging.getLogger(__name__)
 
 
 class SymptomOut(BaseModel):
@@ -106,8 +108,10 @@ def book_appointment_slot(request: BookSlotRequest, authorization: str | None = 
             **({"linked_appointment_id": str(request.linked_appointment_id)} if request.linked_appointment_id else {}),
         )
     except patient_service.PatientServiceUnavailable:
+        logger.warning("booking: slot=%s booking service unavailable", request.slot_id)
         raise HTTPException(status_code=503, detail="Booking service unavailable.") from None
     except Exception:
+        logger.warning("booking: slot=%s could not be booked (taken, invalid, or retry conflict)", request.slot_id)
         raise HTTPException(status_code=409, detail="Could not book this slot. Refresh availability and retry.") from None
     return BookSlotResponse(ok=True, slot_id=str(request.slot_id),
                             status=appt["status"], appointment_id=appt["id"])

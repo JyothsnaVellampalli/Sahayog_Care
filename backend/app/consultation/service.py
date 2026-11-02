@@ -1,7 +1,10 @@
 """Shared appointment consultation lifecycle."""
+import logging
 from datetime import datetime, timezone
 from app import appointments
 from app.book_appointment.db import _client as _admin
+
+logger = logging.getLogger(__name__)
 
 
 class ConsultationError(RuntimeError):
@@ -69,4 +72,5 @@ def start_consultation(consultation_id, consent):
     }).eq("id", visit["id"]).eq("status", "BOOKED").execute()
     if not result.data:
         raise ConsultationError("Appointment changed. Refresh and try again.")
+    logger.info("consultation: visit=%s started (consent recorded)", visit["id"])
     return {"status": "IN_PROGRESS"}

@@ -232,11 +232,27 @@ including already-English input. It preserves turn IDs, order, recording scope
 and neutral speaker distinctions. Missing, reordered or blank translations stop
 the pipeline before SOAP. Translation output is de-identified again.
 
-The second model call selects concise English source excerpts into subjective,
-objective, assessment and plan arrays. Each excerpt must occur within a single
-English turn; this validates against translation, not the original-language
-meaning. Translation accuracy and clinical section placement require review.
-No roles, new diagnoses or treatment recommendations are inferred. The draft
+The second model call writes concise clinical-note entries into subjective,
+objective, assessment and plan arrays, rephrased in the doctor's documenting
+voice (never second-person "you", never direct dialogue quoting) rather than
+quoted verbatim from the transcript, while instructed not to omit any
+clinically relevant detail that was stated. This replaced an earlier
+exact-substring check, which required quoting the transcript verbatim
+(including the clinician's own "you..." dialogue) and is why early drafts
+read like a transcript rather than a clinical note.
+
+A grounding check still flags an entry if most of its substantive words
+(excluding clinical-voice scaffolding like "Patient reports") don't appear
+anywhere in the English translation — intended to catch invented
+facts/diagnoses/medicines while allowing the rephrasing the voice change
+requires. It is advisory only (logs a warning server-side, does not discard
+the draft or fail the job): a word-overlap threshold strict enough to catch
+real fabrication also false-positives on legitimate paraphrases, and
+discarding two already-paid-for LLM calls over a false positive is worse
+than relying on the doctor's existing mandatory review before signing, which
+remains the actual safety net against anything genuinely invented.
+Translation accuracy and clinical section placement require review. No
+roles, new diagnoses or treatment recommendations are inferred. The draft
 is saved after validation to `soap/<consultation_id>.json`, alongside the
 `transcripts/` objects, using the same configured S3 bucket and prefix (or local
 storage fallback). The JSON contains only the four arrays: `subjective`,
@@ -277,10 +293,13 @@ Both calls reuse OPENROUTER_API_KEY, OPENROUTER_MODEL and the adapter timeout.
 LangSmith reuses the booking flow's LANGSMITH_TRACING, LANGSMITH_API_KEY,
 LANGSMITH_ENDPOINT and project/agent/environment settings. Runs are named
 doctor_consultation_soap, with one span per stage and a generated run UUID.
-Only stage status and counts enter graph state; transcript, English text, model
-payloads and credentials stay in invocation-local context, outside trace inputs
-and outputs. There is no checkpoint persistence or automatic model retry.
-Tracing can be disabled without disabling the workflow.
+Only stage status/counts and (from Phase 5) de-identified turns, translation and
+the SOAP draft enter graph state; raw transcript text, model credentials and the
+medicine-suggestion callback stay in invocation-local context, outside trace
+inputs and outputs. Phase 5 added an optional Postgres checkpointer and a
+durable job queue with automatic retry on top of this graph — see
+[Phase 5 progress](Phase5.md). Tracing can be disabled without disabling the
+workflow.
 
 #### Verification
 

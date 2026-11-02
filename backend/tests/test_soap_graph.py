@@ -43,7 +43,11 @@ def test_bad_translation_stops_before_soap(turns):
     assert len(adapter.calls) == 1
 
 
-def test_traced_state_contains_only_progress():
+def test_traced_state_only_carries_de_identified_content():
+    """State may hold de-identified/translated content (Phase 5, for checkpoint
+    resumability), restricted to a known set of keys -- never arbitrary payload,
+    and never content that still needs de-identification (see test_deidentify.py
+    for de-identification coverage itself)."""
     adapter = Adapter([{"id": 0, "text": "No fever for two days."}])
     payload = soap_graph.Payload([{"text": "बुखार नहीं है"}], adapter)
     token = soap_graph._PAYLOAD.set(payload)
@@ -52,6 +56,7 @@ def test_traced_state_contains_only_progress():
     finally:
         soap_graph._PAYLOAD.reset(token)
     assert [next(iter(u)) for u in updates] == ["validate_input", "deidentify", "translate_to_english", "generate_soap", "validate_soap", "medicine_prescription"]
+    allowed_keys = {"stage", "turn_count", "translated_count", "excerpt_count", "flagged_count", "medicine_count", "turns", "english", "draft"}
     for update in updates:
         for value in update.values():
-            assert set(value) <= {"stage", "turn_count", "translated_count", "excerpt_count", "medicine_count"}
+            assert set(value) <= allowed_keys

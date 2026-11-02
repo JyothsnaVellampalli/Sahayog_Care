@@ -106,6 +106,19 @@ def _job_key(consultation_id: str, recording_id: str) -> str:
     return f"transcription_jobs/{consultation_id}/{recording_id}.json"
 
 
+def audio_key(consultation_id: str, recording_id: str, mime: str) -> str:
+    """Permanent storage key for the raw recording, kept indefinitely as proof."""
+    return f"recordings/{consultation_id}/{recording_id}.{_MIME_EXTENSIONS[mime]}"
+
+
+def save_audio_key(consultation_id: str, recording_id: str, key: str) -> None:
+    """Record the permanent audio pointer, independent of job-row retention."""
+    from app.consultation.jobs import client
+    client().rpc('save_consultation_recording_audio', {
+        'p_visit': consultation_id, 'p_recording': recording_id, 'p_key': key,
+    }).execute()
+
+
 def _load_job(consultation_id, recording_id):
     from app.consultation.jobs import client
     rows = (client().table('consultation_recordings').select('provider_state')

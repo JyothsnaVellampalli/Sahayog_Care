@@ -13,6 +13,18 @@ from app.consultation.sarvam import SarvamError
 
 logger = logging.getLogger(__name__)
 
+# Best-effort in-process preemption: lets a newly queued TRANSCRIPTION job
+# cancel a RUNNING SOAP job on the same appointment immediately, instead of
+# waiting for its DB lease to expire. Only works when enqueue and the worker
+# share a process (the normal single-uvicorn-process deployment here); the DB
+# guard in finish_consultation_job is what makes preemption correct even when
+# they don't.
+_RUNNING: dict[str, "asyncio.Task"] = {}
+
+
+def running_task(appointment_id):
+    return _RUNNING.get(appointment_id)
+
 
 def client():
     admin = service._admin()
@@ -22,6 +34,12 @@ def client():
 
 
 def enqueue(visit_id, kind, dedupe, payload=None):
+    """Returns ``{'job': row, 'superseded_soap_job_id': id_or_None}``.
+
+    A queued TRANSCRIPTION job flips any RUNNING SOAP job on the same visit to
+    FAILED (superseded) in the same transaction; the caller cancels the local
+    asyncio task for it, if any, via ``running_task``.
+    """
     return client().rpc('enqueue_consultation_job', {
         'p_visit': visit_id, 'p_kind': kind, 'p_dedupe': dedupe, 'p_payload': payload or {},
     }).execute().data
@@ -75,6 +93,7 @@ def update_lease(job):
 
 
 def fail(job, message):
+    logger.warning('consultation: job=%s visit=%s failed: %s', job.get('id'), job.get('appointment_id'), message)
     client().table('consultation_jobs').update({
         'state': 'FAILED', 'error': message, 'lease_until': None,
         'updated_at': datetime.now(timezone.utc).isoformat(),
@@ -103,6 +122,7 @@ def prepare_soap(job):
                 .eq('appointment_id', visit['id']).eq('kind', 'SOAP').eq('state', 'SUCCEEDED')
                 .order('updated_at', desc=True).limit(1).execute().data or [])
     if baseline and previous and previous[0]['source_hash'] == digest and not job['payload'].get('force'):
+        logger.info('consultation: job=%s visit=%s transcript unchanged, reusing existing SOAP', job.get('id'), visit['id'])
         return baseline, digest, baseline
     if not any(str(row.get('text') or '').strip() for row in segments):
         raise soap.SoapError('No speech was detected. Record audio or add a transcript note before generating SOAP.')
@@ -114,7 +134,9 @@ def prepare_soap(job):
         # A slow/unavailable pharmacy must not discard the consultation summary.
         logger.warning('Medicine suggestions unavailable for this SOAP job')
     suggestions = []
-    draft = soap.generate_draft(segments, medicines=medicines, on_prescription=suggestions.extend)
+    thread_id = f"soap:{visit['id']}:{job['id']}"
+    draft = soap.generate_draft(segments, medicines=medicines, on_prescription=suggestions.extend,
+                                thread_id=thread_id, consultation_id=visit['id'])
     key = f"soap_results/{visit['id']}/{job['id']}/{job['lease_token']}.json"
     storage.put_json(key, {'soap': draft.model_dump(), 'suggestions': suggestions, 'source_hash': digest})
     return key, digest, baseline
@@ -122,18 +144,48 @@ def prepare_soap(job):
 
 async def process(job):
     # A live heartbeat must not leave a hung model call RUNNING forever.
+    # A plain Task (not asyncio.wait_for's implicit one) so an external
+    # cancel() via _RUNNING surfaces as a normal "done, cancelled" result
+    # here instead of propagating CancelledError into the caller (worker()),
+    # which would otherwise mistake it for the worker loop itself being
+    # shut down and exit for good.
+    task = asyncio.ensure_future(_process(job))
+    _RUNNING[job['appointment_id']] = task
     try:
-        await asyncio.wait_for(_process(job), timeout=240 if job['kind'] == 'SOAP' else 2100)
-    except TimeoutError:
-        await asyncio.to_thread(fail, job, 'Processing timed out. Your saved data is retained. Please retry.')
+        try:
+            done, pending = await asyncio.wait({task}, timeout=240 if job['kind'] == 'SOAP' else 2100)
+        except asyncio.CancelledError:
+            # process() itself was cancelled (worker shutdown) -- clean up the
+            # inner task too, same as asyncio.wait_for would have.
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            raise
+        if task in pending:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            logger.warning('consultation: job=%s visit=%s timed out', job.get('id'), job.get('appointment_id'))
+            await asyncio.to_thread(fail, job, 'Processing timed out. Your saved data is retained. Please retry.')
+        elif task.cancelled():
+            logger.info('consultation: job=%s visit=%s cancelled (superseded)', job.get('id'), job.get('appointment_id'))
+        else:
+            exc = task.exception()
+            if exc:
+                raise exc
+    finally:
+        if _RUNNING.get(job['appointment_id']) is task:
+            del _RUNNING[job['appointment_id']]
 
 
 async def _process(job):
     pulse = asyncio.create_task(heartbeat(job))
+    logger.info('consultation: job=%s kind=%s visit=%s processing started',
+                job.get('id'), job.get('kind'), job.get('appointment_id'))
     try:
         if job['kind'] == 'SOAP':
             key, digest, baseline = await asyncio.to_thread(prepare_soap, job)
             await asyncio.to_thread(publish, job, key, digest, baseline)
+            logger.info('consultation: job=%s visit=%s SOAP generation succeeded',
+                        job.get('id'), job.get('appointment_id'))
         else:
             payload = job['payload']
             audio = (base64.b64decode(payload['audio_base64']) if payload.get('audio_base64') else
@@ -142,27 +194,32 @@ async def _process(job):
                 raise SarvamError('Saved audio is unavailable. Please upload the recording again.')
             await asyncio.to_thread(lambda: asyncio.run(transcription.submit_recording(
                 job['appointment_id'], job['dedupe_key'], audio, payload['mime'], payload['session'])))
+            logger.info('consultation: job=%s visit=%s recording submitted to Sarvam',
+                        job.get('id'), job.get('appointment_id'))
             for _ in range(360):
                 result = await asyncio.to_thread(lambda: asyncio.run(transcription.poll_recording(
                     job['appointment_id'], job['dedupe_key'], persist=False)))
                 if result['state'] == 'Completed':
                     key = f"transcription_results/{job['appointment_id']}/{job['id']}/{job['lease_token']}.json"
                     await asyncio.to_thread(storage.put_json, key, result)
-                    accepted = await asyncio.to_thread(publish, job, key)
-                    if accepted and payload.get('audio_key'):
-                        await asyncio.to_thread(storage.delete, payload['audio_key'])
+                    # The uploaded recording is kept permanently (recordings/...) as
+                    # proof; nothing is deleted from storage on success anymore.
+                    await asyncio.to_thread(publish, job, key)
+                    logger.info('consultation: job=%s visit=%s transcription succeeded (%d segments)',
+                                job.get('id'), job.get('appointment_id'), len(result.get('segments', [])))
                     return
                 if result['state'] == 'Failed':
                     raise SarvamError(result.get('note') or 'Audio processing failed. Please retry.')
                 await asyncio.sleep(5)
             raise SarvamError('Audio is taking longer than expected. Retry processing to resume the saved recording.')
     except asyncio.CancelledError:
-        # Do not mark failed: another worker can recover the expired lease.
+        # Do not mark failed: either another worker can recover the expired
+        # lease, or (preemption) the DB row is already FAILED/superseded.
         raise
     except (soap.SoapError, SarvamError, service.ConsultationError) as error:
         await asyncio.to_thread(fail, job, str(error))
     except Exception:
-        logger.warning('Consultation processing failed; job remains recoverable')
+        logger.warning('consultation: job=%s unexpected processing error; job remains recoverable', job.get('id'))
         await asyncio.to_thread(fail, job, 'Processing could not finish. Your saved data is retained. Please retry.')
     finally:
         pulse.cancel()
@@ -174,11 +231,13 @@ async def worker():
         try:
             job = await asyncio.to_thread(lambda: client().rpc('claim_consultation_job', {}).execute().data)
             if job:
+                logger.info('consultation: job=%s kind=%s visit=%s claimed',
+                            job.get('id'), job.get('kind'), job.get('appointment_id'))
                 await process(job)
             else:
                 await asyncio.sleep(2)
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.warning('Consultation job queue unavailable; retrying')
+            logger.warning('consultation: job queue unavailable; retrying')
             await asyncio.sleep(10)

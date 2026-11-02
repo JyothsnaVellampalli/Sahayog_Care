@@ -1,4 +1,7 @@
 """Shared appointment persistence; 'consultation' is the doctor-facing name."""
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def symptom_labels(symptoms):
@@ -17,6 +20,8 @@ def book(client, patient_id, slot_id, reason, idempotency_key,
         "p_specialty_id": specialty_id, "p_symptom_text": symptom_text, "p_emergency_intake_id": emergency_intake_id,
         **({"p_linked_appointment_id": linked_appointment_id} if linked_appointment_id else {}),
     }).execute()
+    logger.info("booking: slot=%s reserved appointment_id=%s status=%s",
+                slot_id, (result.data or {}).get("id"), (result.data or {}).get("status"))
     return result.data
 
 

@@ -105,7 +105,7 @@ Status: Complete (2026-10-29).
   across prescription, pharmacy and patient flows. Desktop/mobile screenshots
   and accessibility checks were included. Providers were stubbed in these tests.
 - The processing follow-up requires the queue and prescription migrations after
-  Phase 4.3. See [consultation processing](../Consultation-processing.md) for rollout.
+  Phase 4.3. See [Phase 5 progress](Phase5.md) for the durable job-queue design and rollout.
 
 ## Phase 4.3 - Stock locking
 

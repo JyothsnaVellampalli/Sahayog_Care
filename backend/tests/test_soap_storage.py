@@ -32,7 +32,8 @@ def test_generation_saves_versioned_result_without_publishing(monkeypatch, tmp_p
 
 
 def test_enqueue_returns_without_waiting_for_model(monkeypatch, generation):
-    monkeypatch.setattr(jobs, 'enqueue', lambda *a: {'id': 'job', 'kind': 'SOAP', 'state': 'QUEUED'})
+    monkeypatch.setattr(jobs, 'enqueue', lambda *a: {'job': {'id': 'job', 'kind': 'SOAP', 'state': 'QUEUED'},
+                                                     'superseded_soap_job_id': None})
     monkeypatch.setattr(soap, 'generate_draft', lambda *a, **kw: pytest.fail('Request must not wait for the LLM'))
     assert router.generate_soap('visit')['job']['state'] == 'QUEUED'
 

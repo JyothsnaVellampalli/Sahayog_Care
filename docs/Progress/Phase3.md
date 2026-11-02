@@ -141,12 +141,7 @@ symptoms require clinical review before claiming complete specialty coverage.
 The rollout smoke checks listed above must still be run against the target
 database.
 
-### Implementation and verification references
-
-See [Phase 3 implementation and rollout](../Phase3.md) for the full migration
-order, storage retention behavior, coordinated deployment steps and smoke
-checks. This phase supersedes Phase 2's historical `history` and
-`legacy_consultation_id` contracts.
-
-Completion is recorded from the project owner's confirmation; no migrations or
-application tests were rerun for this documentation-only update.
+This phase supersedes Phase 2's historical `history` and
+`legacy_consultation_id` contracts. Completion is recorded from the project
+owner's confirmation; no migrations or application tests were rerun for this
+documentation-only update.

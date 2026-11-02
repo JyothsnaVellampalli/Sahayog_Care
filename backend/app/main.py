@@ -8,7 +8,13 @@ added in later phases.
 
 from __future__ import annotations
 import asyncio
+import logging
 from contextlib import asynccontextmanager
+
+from app.logging_config import configure_logging
+
+# Configured before any other app module logs anything during import.
+configure_logging()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,16 +29,20 @@ from app.pharmacy.router import router as pharmacy_router
 from app.consultation.jobs import worker
 from app.care_records import router as care_records_router
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app):
     workers = [asyncio.create_task(worker()) for _ in range(2)] if settings.supabase_configured else []
+    logger.info("app: startup complete, %d consultation worker(s) running", len(workers))
     try:
         yield
     finally:
         for task in workers:
             task.cancel()
         await asyncio.gather(*workers, return_exceptions=True)
+        logger.info("app: shutdown complete")
 
 app = FastAPI(
     lifespan=lifespan,

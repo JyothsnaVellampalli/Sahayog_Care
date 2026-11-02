@@ -30,6 +30,13 @@ boto3==1.35.90
 python-multipart==0.0.20
 # Sarvam batch speech recognition uses the existing httpx dependency.
 
+# --- Phase 5: consultation memory ---
+# Postgres-backed LangGraph checkpointer for the SOAP graph (resumable across
+# restarts). Separate from psycopg2, which scripts/apply_migration.py already
+# uses for one-shot migration connections.
+langgraph-checkpoint-postgres==3.2.0
+psycopg[binary,pool]==3.2.3
+
 # --- Optional, stronger de-identification ---
 # The de-identification node works out of the box with a built-in regex scrubber.
 # For ML-backed PII detection (PRD section 7 names presidio), additionally install

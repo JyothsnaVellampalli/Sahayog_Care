@@ -40,7 +40,7 @@ def load_for_visit(visit):
     return load_draft(visit['id'])
 
 
-def generate_draft(segments: list[dict], adapter=None, **prescription_options) -> SoapDraft:
+def generate_draft(segments: list[dict], adapter=None, thread_id=None, **prescription_options) -> SoapDraft:
     """Run translation and SOAP through the traced consultation graph."""
     from app.consultation.soap_graph import run_soap
-    return run_soap(segments, adapter, **prescription_options)
+    return run_soap(segments, adapter, thread_id=thread_id, **prescription_options)

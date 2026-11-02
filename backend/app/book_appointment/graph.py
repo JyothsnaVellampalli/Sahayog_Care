@@ -123,6 +123,8 @@ def _validate_input(state: IntakeState) -> dict[str, Any]:
     invalid = [s.symptom_id for s in request.symptoms if s.symptom_id not in allowed]
     # Keep only valid selections downstream.
     request.symptoms = [s for s in request.symptoms if s.symptom_id in allowed]
+    logger.info("booking: validate_input selected=%d invalid=%d free_text=%s",
+                len(request.symptoms), len(invalid), bool(request.free_text))
     return {
         "invalid_symptom_ids": invalid,
         "selected_symptoms": _selected_summary(request),
@@ -133,6 +135,7 @@ def _deidentify(state: IntakeState) -> dict[str, Any]:
     """Scrub identifiers from the patient's free text before the model call."""
     request = state["request"]
     result = deidentify(request.free_text)
+    logger.info("booking: deidentify removed=%s", dict(result.removed))
     return {
         "deidentified_text": result.text,
         "removed_identifiers": result.removed,
@@ -148,6 +151,8 @@ def _classify(state: IntakeState) -> dict[str, Any]:
             specialties = []
         classification, specialty = classify_intake(
             state["request"], state.get("deidentified_text", ""), specialties, adapter)
+        logger.info("booking: classify category=%s specialty=%s model=%s",
+                    classification.category, (specialty or {}).get("code"), adapter.classifier_model)
         return {"classification": classification, "specialty": specialty,
                 "model": adapter.classifier_model,
                 "note": ("Please describe your symptoms in more detail."
@@ -155,6 +160,7 @@ def _classify(state: IntakeState) -> dict[str, Any]:
                          None if specialty else
                          "No supported specialty could be confirmed. Please contact the care team.")}
     except ClassifierError as exc:
+        logger.warning("booking: classify unavailable (%s)", exc)
         return {"classification": Classification(status="UNAVAILABLE", category=None),
                 "model": None, "note": str(exc), "outcome": "unavailable"}
 
@@ -199,7 +205,9 @@ def _emergency(state: IntakeState) -> dict[str, Any]:
             )
             if saved is None:
                 raise RuntimeError("Emergency was not saved")
+            logger.info("booking: emergency saved intake_id=%s", saved.get("id"))
         except Exception:
+            logger.warning("booking: emergency intake could not be saved")
             return {"outcome": "emergency", "emergency_message": EMERGENCY_MESSAGE,
                     "note": "Your emergency could not be saved. Please contact the care team directly."}
 
@@ -242,6 +250,8 @@ def _find_doctors(state: IntakeState) -> dict[str, Any]:
             return {"outcome": "booking", "doctors": [], "severe_guidance": guidance,
                     "note": "Your profile needs a city before we can suggest local doctors. Please contact the care team to update your profile."}
     doctors = doctors_with_slots(specialty["id"], limit_per_doctor=5, **({"city": city} if city else {}))
+    logger.info("booking: find_doctors specialty=%s city=%s doctors_found=%d",
+                specialty.get("code"), city, len(doctors))
     return {
         "outcome": "booking",
         "doctors": doctors,
@@ -296,6 +306,7 @@ def run_intake(
     The trace metadata includes the selected symptom labels for easy reading.
     """
     selected = _selected_summary(request)
+    logger.info("booking: intake started patient_id=%s symptoms=%d", request.patient_id, len(selected))
     config = run_config()
     # Attach a readable selection summary to the run metadata (labels only).
     config["metadata"] = {
@@ -320,6 +331,7 @@ def run_intake(
         _ADAPTER_CTX.reset(token)
 
     specialty = final.get("specialty")
+    logger.info("booking: intake finished outcome=%s doctors=%d", final.get("outcome"), len(final.get("doctors", [])))
     return IntakeResponse(
         classification=final["classification"],
         symptoms=final.get("selected_symptoms", selected),

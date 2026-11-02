@@ -119,6 +119,29 @@ def delete(key: str) -> None:
             path.unlink()
 
 
+def list_keys(prefix: str) -> list[str]:
+    """List logical keys under ``prefix`` (used by retention cleanup only)."""
+    if settings.s3_configured:
+        keys = []
+        paginator = _s3_client().get_paginator("list_objects_v2")
+        s3_prefix = _s3_key(prefix)
+        try:
+            for page in paginator.paginate(Bucket=settings.s3_bucket, Prefix=s3_prefix):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    local_prefix = settings.s3_prefix.strip("/")
+                    keys.append(key[len(local_prefix) + 1:] if local_prefix else key)
+        except Exception as exc:
+            raise StorageError(f"Could not list objects under {prefix}: {exc}") from exc
+        return keys
+    base = _BACKEND_DIR / settings.local_storage_dir if not Path(settings.local_storage_dir).is_absolute() \
+        else Path(settings.local_storage_dir)
+    root = base / prefix
+    if not root.exists():
+        return []
+    return [str(path.relative_to(base)).replace("\\", "/") for path in root.rglob("*") if path.is_file()]
+
+
 def put_json(key: str, payload: dict | list) -> str:
     """Store a JSON document (used for transcripts and SOAP drafts)."""
     data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")

@@ -7,11 +7,12 @@ An AI-assisted patient and doctor platform for a multi-hospital network.
   libraries, model calls and storage.
 - [Product requirements](docs/PRD.md) and [UI design](docs/UI_Design.md).
 - [Workflow](docs/Workflow.md): phased delivery plan.
-- [Phase 1 progress](docs/Progress/Phase1.md): patient portal and booking.
+- [Phase 1 progress](docs/Progress/Phase1.md): patient portal, booking, and the
+  Phase 1 (Improved) follow-up/helpdesk/reports work.
 - [Phase 2 progress](docs/Progress/Phase2.md): doctor portal and consultation scribe.
 - [Phase 3 progress](docs/Progress/Phase3.md): symptom catalogue and appointment schema.
 - [Phase 4 progress](docs/Progress/Phase4.md): pharmacist portal, catalogue and stock.
-- [Phase 6 progress](docs/Progress/Phase6.md): follow-up appointments, helpdesk and reports.
+- [Phase 5 progress](docs/Progress/Phase5.md): durable consultation processing and memory.
 
 ## What works today
 
@@ -70,7 +71,7 @@ and signed snapshots use configured S3 storage or a local filesystem fallback.
   inventory shows available, reserved and total stock.
 - Apply the [Phase 4.3 migration](docs/Progress/Phase4.md#rollout-and-verification)
   before running the updated signing and pharmacy flows.
-- Then apply the [consultation processing and prescription migrations](docs/Consultation-processing.md#deployment)
+- Then apply the [consultation processing and prescription migrations](docs/Progress/Phase5.md#setup--deployment)
   for background transcription/SOAP and Supabase prescription drafts.
 
 ### Follow-up appointments, helpdesk and reports
@@ -166,6 +167,7 @@ Model IDs below are code defaults and can be overridden in the environment.
 | Variables | Purpose |
 | --- | --- |
 | APP_NAME, ENVIRONMENT, FRONTEND_ORIGINS | Service identity and allowed frontend origins. |
+| LOG_LEVEL | Progress logs (booking and consultation steps) print at this level to stdout; default INFO. |
 | SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY | Auth and server-side database access. |
 | DB_PASSWORD | Direct database access for the migration runner. |
 | OPENROUTER_API_KEY | Shared key for Jev decisions and consultation LLM calls. |
@@ -198,10 +200,32 @@ For a fresh database, apply them in this order:
 11. pharmacy_reservation_medicines.sql: backfill and enforce per-medicine reservations.
 12. phase_6_followups_reports.sql: follow-up appointment linking and
     `consultation_reports` table.
+13. phase_5_consultation_memory.sql: permanent recording pointer, SOAP-job
+    preemption and the retention-cleanup RPC (apply after
+    consultation_processing.sql; see [Phase 5 progress](docs/Progress/Phase5.md#setup--deployment)).
+14. consultation_retry_limit.sql: caps manual retries of a failed job at 3
+    attempts (apply after consultation_processing.sql).
+15. consultation_regenerate_fix.sql: a forced SOAP regenerate now supersedes
+    a stuck/active SOAP job instead of silently attaching to it (apply after
+    phase_5_consultation_memory.sql).
 
-See [Phase 4](docs/Progress/Phase4.md), [Consultation processing](docs/Consultation-processing.md)
-and [Phase 6](docs/Progress/Phase6.md) for setup notes specific to each file,
-including the Phase 4.1 demo pharmacist phone used by several flows.
+See [Phase 4](docs/Progress/Phase4.md) and [Phase 5](docs/Progress/Phase5.md)
+for setup notes specific to each file, including the Phase 4.1 demo
+pharmacist phone used by several flows and the follow-up/helpdesk/reports
+migration covered in [Phase 1 progress](docs/Progress/Phase1.md).
+
+### Maintenance
+
+Consultation processing state (job rows, superseded transcript/SOAP edit
+drafts) is not deleted automatically. Periodically run, from `backend`:
+
+```powershell
+.venv/Scripts/python.exe scripts/cleanup_consultation_processing.py --apply
+```
+
+Omit `--apply` for a dry run. It only removes state older than
+`CONSULTATION_PROCESSING_TTL_DAYS` (default 15); signed records, signatures
+and recorded audio are never touched.
 
 For example, from backend:
 

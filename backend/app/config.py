@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     # App-wide validation switch; never expose other settings through the API.
     show_speech_transcripts: bool = False
+    # Progress logging (booking/consultation step logs) — INFO by default so
+    # they are visible in the terminal and in deployment stdout logs.
+    log_level: str = "INFO"
 
     # CORS: origins allowed to call the API (the React dev server by default).
     frontend_origins: list[str] = [
@@ -75,6 +78,19 @@ class Settings(BaseSettings):
         return bool(
             self.aws_access_key_id and self.aws_secret_access_key and self.s3_bucket
         )
+
+    # Phase 5: a direct Postgres connection string (Supabase "Session pooler"
+    # URI) for the SOAP graph's LangGraph checkpointer. Optional: when unset,
+    # the graph compiles and runs exactly as before, without checkpointing.
+    consultation_checkpoint_db_url: str | None = None
+
+    @property
+    def consultation_checkpointing_configured(self) -> bool:
+        return bool(self.consultation_checkpoint_db_url)
+
+    # Phase 5: how long processing state (jobs, transcript/SOAP drafts) is
+    # retained before scripts/cleanup_consultation_processing.py may purge it.
+    consultation_processing_ttl_days: int = 15
 
     # LangSmith tracing (observability/audit — PRD section 7).
     langsmith_tracing: bool = False

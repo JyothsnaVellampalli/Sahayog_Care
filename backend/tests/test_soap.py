@@ -31,14 +31,23 @@ def test_grounded_draft_removes_identifiers_and_preserves_negation():
 
 
 @pytest.mark.parametrize("response", [
-    dict(subjective=[], objective=[], assessment=["Invented diagnosis"], plan=[]),
     dict(subjective="No fever.", objective=[], assessment=[], plan=[]),
     dict(subjective=[], objective=[], assessment=[]),
     dict(subjective=[], objective=[], assessment=[], plan=[], signed=True),
 ])
-def test_rejects_unsupported_or_invalid_output(response):
+def test_rejects_invalid_schema(response):
     with pytest.raises(SoapError):
         generate_draft([{"text": "No fever."}], Adapter(response))
+
+
+def test_unsupported_content_is_flagged_not_rejected(caplog):
+    """Grounding is advisory (Phase: clinical-note rephrasing): an excerpt
+    sharing no words with the transcript is logged, not discarded -- the
+    doctor's mandatory review before signing is the actual safety net."""
+    adapter = Adapter(dict(subjective=[], objective=[], assessment=["Invented diagnosis"], plan=[]))
+    draft = generate_draft([{"text": "No fever."}], adapter)
+    assert draft.assessment == ["Invented diagnosis"]
+    assert any("grounded" in record.message for record in caplog.records)
 
 
 def test_empty_transcript_does_not_call_model():

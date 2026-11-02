@@ -19,15 +19,17 @@ def objects(monkeypatch):
     return data
 
 
-def test_audio_is_saved_before_job_acknowledgement(monkeypatch):
-    events = []
+def test_audio_is_saved_permanently_before_job_acknowledgement(monkeypatch):
+    saved = []
     visit, recording = uuid4(), uuid4()
     monkeypatch.setattr(router, '_editable', lambda _: {'consent_recorded': True})
-    monkeypatch.setattr(storage, 'put_bytes', lambda key, audio, mime: events.append(('save', audio)))
-    def enqueue(*args):
-        assert events == []  # No audio object is written to S3.
-        assert base64.b64decode(args[3]['audio_base64']) == b'audio'
-        return {'id':'job','kind':'TRANSCRIPTION','state':'QUEUED','payload':args[3]}
+    monkeypatch.setattr(storage, 'put_bytes', lambda key, audio, mime: saved.append((key, audio)))
+    monkeypatch.setattr(router.transcription, 'save_audio_key', lambda *a: saved.append(('pointer',) + a))
+    def enqueue(visit_id, kind, dedupe, payload):
+        assert saved and saved[0][0] == payload['audio_key']  # Permanent key written first.
+        assert 'audio_base64' not in payload
+        return {'job': {'id': 'job', 'kind': kind, 'state': 'QUEUED', 'payload': payload},
+                'superseded_soap_job_id': None}
     monkeypatch.setattr(jobs, 'enqueue', enqueue)
     audio = UploadFile(BytesIO(b'audio'), headers=Headers({'content-type':'audio/webm'}))
     result = asyncio.run(router.transcribe(visit, audio, recording, 1))
@@ -35,7 +37,31 @@ def test_audio_is_saved_before_job_acknowledgement(monkeypatch):
     assert 'payload' not in result['job']
 
 
-def test_worker_publishes_audio_result_and_only_then_removes_audio(monkeypatch, objects):
+def test_new_recording_cancels_a_running_soap_task(monkeypatch):
+    visit, recording = uuid4(), uuid4()
+    monkeypatch.setattr(router, '_editable', lambda _: {'consent_recorded': True})
+    monkeypatch.setattr(storage, 'put_bytes', lambda *a: None)
+    monkeypatch.setattr(router.transcription, 'save_audio_key', lambda *a: None)
+    monkeypatch.setattr(jobs, 'enqueue', lambda *a: {'job': {'id': 'job', 'kind': 'TRANSCRIPTION', 'state': 'QUEUED'},
+                                                     'superseded_soap_job_id': 'soap-job-1'})
+
+    async def scenario():
+        async def hang():
+            await asyncio.sleep(1000)
+        task = asyncio.ensure_future(hang())
+        jobs._RUNNING[str(visit)] = task
+        try:
+            audio = UploadFile(BytesIO(b'audio'), headers=Headers({'content-type':'audio/webm'}))
+            await router.transcribe(visit, audio, recording, 1)
+            await asyncio.gather(task, return_exceptions=True)
+            return task.cancelled()
+        finally:
+            jobs._RUNNING.pop(str(visit), None)
+
+    assert asyncio.run(scenario())
+
+
+def test_worker_publishes_audio_result_and_keeps_audio_permanently(monkeypatch, objects):
     events = []
     monkeypatch.setattr(storage, 'get_bytes', lambda *a, **kw: b'audio')
     monkeypatch.setattr(storage, 'delete', lambda key: events.append('delete'))
@@ -52,14 +78,14 @@ def test_worker_publishes_audio_result_and_only_then_removes_audio(monkeypatch, 
     monkeypatch.setattr(jobs, 'publish', publish)
     asyncio.run(jobs.process({'id':'job','kind':'TRANSCRIPTION','appointment_id':'visit','dedupe_key':'recording','lease_token':'lease',
                              'payload':{'audio_key':'audio','mime':'audio/webm','session':1}}))
-    assert events == ['publish','delete']
+    assert events == ['publish']  # Audio is never deleted; it is kept permanently as proof.
 
 
 def test_failed_worker_preserves_saved_data_and_reports_safe_error(monkeypatch):
     failures = []
     monkeypatch.setattr(jobs, 'prepare_soap', lambda _: (_ for _ in ()).throw(RuntimeError('private provider body')))
     monkeypatch.setattr(jobs, 'fail', lambda job, message: failures.append(message))
-    asyncio.run(jobs.process({'kind':'SOAP'}))
+    asyncio.run(jobs.process({'kind':'SOAP', 'appointment_id': 'visit'}))
     assert 'private provider body' not in failures[0]
     assert 'retained' in failures[0]
 
@@ -101,11 +127,14 @@ def test_partial_prescription_is_saved_without_soap_and_requires_review(objects,
 
 def test_hung_soap_becomes_retryable_without_publishing(monkeypatch):
     failures = []
-    async def timeout(task, **kwargs):
-        task.close()
-        assert kwargs['timeout'] == 240
-        raise TimeoutError
-    monkeypatch.setattr(jobs.asyncio, 'wait_for', timeout)
+    async def hang(job):
+        await asyncio.sleep(1000)
+    async def fake_wait(tasks, timeout=None):
+        assert timeout == 240
+        return set(), set(tasks)  # Nothing finished before the deadline.
+    monkeypatch.setattr(jobs, '_process', hang)
+    monkeypatch.setattr(jobs.asyncio, 'wait', fake_wait)
     monkeypatch.setattr(jobs, 'fail', lambda job, message: failures.append(message))
-    asyncio.run(jobs.process({'kind': 'SOAP'}))
+    asyncio.run(jobs.process({'kind': 'SOAP', 'appointment_id': 'visit'}))
     assert 'timed out' in failures[0]
+    assert 'visit' not in jobs._RUNNING

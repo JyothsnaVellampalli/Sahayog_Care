@@ -155,7 +155,7 @@
 - The pharmacist can unlock the stock locked.
 
 
-[x] Phase 6 - Followup appointment
+[x] Phase 1(Improved) - Followup appointment
 ### Goals
 - Add a checkbox in the symptoms tab for follow up consulattion.
 - If patient checked the follow-up consulattion, show him the list of his appointments and ask t select the one that is related to this and make the appoiontment record with `linked-appointment` as the previous related appointment.
@@ -173,19 +173,48 @@
 - A follow-up consulation record is recorded with the previous linked appointment/consulttaion and can be viewed in UI.
 - A reports UI for doctor and helpdesk portal and patient can only view the reports.
 
-### Implementation
-- Shared `appointments.linked_appointment_id`, atomic booking validation and emergency intake link preservation.
-- Patient appointment links; doctor/helpdesk consultation links open the preceding related visit in a new tab.
-- Helpdesk filters and read-only clinical view; shared PDF/image reports carousel with staff upload and patient view/download.
-- Migration, access rules and verification: see `docs/Phase6.md`.
 
-
-[ ] Phase 5 - Memory
+[x] Phase 5 - Memory
 ### Goal
-- Add the langragph checkpointer for every consulatation as there are high chances that doctor speaks stops and then again may start speaking where the thread is same but some operations are happening again. Doctor may wait for some time to get some test like blood test or X-Ray done and then speaks and the generates SOAP. So maintain the check pointer for this. We are adding the converstaion to S3
+- Add the langragph checkpointer(PostgresSaver) storing refernces for every consulatation as there are high chances that doctor stops speaking and then again may start speaking where the thread is same but some operations are happening again. Doctor may wait for some time to get some test like blood test or X-Ray done and then speaks and then re-generates SOAP. So maintain the check pointer for this. We are adding the converstaion to S3.
+- Keep consultation id(appointment id) as the thread id for langraph and store each step done in their respective storages.
+- Each time the conversation stops, transcript and store. If doctor started speaking again, append the latest transcript to the old one identified with consultation id. In this case, if the SOAP generation has started, then stop the generation and start it after doctor finishes speaking and the latest transcript is generated.
+- Keep the TTL for the checkpointer memory to be 15days for now(in production, it will be more).
+- Store the audio files also in S3 as the proof.
+
+### Done When
+- Setup langraph postgres checkpointer for holding the consultation information.
+- No information should be lost in any case.
 
 
-[ ] Phase 6 - Notification engine
+[ ] Phase 6 - Patient Chatbot
+
+[ ] Phase 6.1 - Data Chunking and ingestion
+### Goals
+- Build a AWS opensearch system for patient chatbot. 
+- Patient natuarl language text input as text chunks.
+- SOAP summary should be stored as text chunks each section as one chunk.
+- Reports text content as text chunk and the tables as table as it is.
+- Each chunk should store metadata - patient id, doctor id, appointment id, chunk data type - SOAP(with section name mentioned) or report or patient symptom data.
+- Use `OPENROUTER_EMBEDDINGS_MODEL` from env for generating embeddings.
+- Do the data ingestion for the existing data in the system.
+- For the upcoming appointemnts and consulatations. After book_appointment and consultation flow feed the data to search system using a background job. (In pro9duiction, will run CRON to handle this).
+### Done When
+- All the existing data is fed to opensearch and after each appointment booking and consultatin a background job should fed the data to search system.
+
+[ ] Phase 6.2 - Retrieval system
+### Goals
+- The retrieval should be hybrid. First filtering out chunks by patient id or doctor id or appointment id based on query and then using keyword or semantic or both searches. The search suitable has to be decided by user query. Add a Jev based retrieval choosing system, which choses metadata filtering needed and the retrieval type based on query.
+### Done When
+- Retrieval should happen based on user query.
+
+[ ] Phase 6.3 - UI and querying
+### Goals
+- Add a `Ask your query` tab in patient portal. Refer to existing design system and the UI that blends with existing system.
+- User should ask any query on the consulatations and the system should be able to response.
+
+
+[ ] Phase 7 - Notification engine
 ### Goals
 - Add a new notification sender module.
 - Add handlers to send notification which can be used in multiple other modules for sending notifications.

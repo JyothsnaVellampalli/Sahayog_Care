@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 import asyncio
-import base64
 import logging
 from time import monotonic
 
@@ -147,11 +146,27 @@ async def transcribe(
     mime = (file.content_type or '').split(';')[0].lower().strip()
     if not audio or mime not in transcription._MIME_EXTENSIONS:
         raise HTTPException(422, 'Upload a non-empty supported audio recording.')
+    logger.info('consultation: visit=%s recording=%s upload received (%d bytes, %s)',
+                consultation_id, recording_id, len(audio), mime)
     try:
-        job = await asyncio.to_thread(jobs.enqueue, str(consultation_id), 'TRANSCRIPTION', str(recording_id),
-                                      {'audio_base64': base64.b64encode(audio).decode('ascii'), 'mime': mime, 'session': session})
+        key = transcription.audio_key(str(consultation_id), str(recording_id), mime)
+        await asyncio.to_thread(storage.put_bytes, key, audio, mime)
+        await asyncio.to_thread(transcription.save_audio_key, str(consultation_id), str(recording_id), key)
+        result = await asyncio.to_thread(jobs.enqueue, str(consultation_id), 'TRANSCRIPTION', str(recording_id),
+                                         {'audio_key': key, 'mime': mime, 'session': session})
+        job = result['job']
+        superseded = result.get('superseded_soap_job_id')
+        if superseded:
+            task = jobs.running_task(str(consultation_id))
+            if task:
+                task.cancel()
+            logger.info('consultation: visit=%s new recording superseded running SOAP job=%s',
+                        consultation_id, superseded)
+        logger.info('consultation: visit=%s recording=%s transcription job=%s queued',
+                    consultation_id, recording_id, job.get('id'))
         return {'job': public_job(job), 'recording_id': str(recording_id), 'state': 'Processing'}
-    except (StorageError, OSError, APIError, service.ConsultationServiceUnavailable):
+    except (StorageError, OSError, APIError, service.ConsultationServiceUnavailable) as exc:
+        logger.warning('Recording upload failed: %s', exc)
         raise HTTPException(503, 'Could not save the recording. Retry uploading it.') from None
 
 
@@ -184,10 +199,21 @@ def append_segment(consultation_id: str, request: AppendSegmentRequest) -> Trans
 @router.post("/consultations/{consultation_id}/soap", status_code=202)
 def generate_soap(consultation_id: str):
     visit = _editable(consultation_id)
+    logger.info('consultation: visit=%s SOAP generation requested', consultation_id)
     try:
         if not jobs.load_transcript(visit):
             raise HTTPException(422, 'Record audio or add a transcript note before generating SOAP.')
-        return {'job': public_job(jobs.enqueue(visit['id'], 'SOAP', str(uuid4()), {'force': True}))}
+        result = jobs.enqueue(visit['id'], 'SOAP', str(uuid4()), {'force': True})
+        job = result['job']
+        superseded = result.get('superseded_soap_job_id')
+        if superseded:
+            task = jobs.running_task(consultation_id)
+            if task:
+                task.cancel()
+            logger.info('consultation: visit=%s regenerate superseded stuck/running SOAP job=%s',
+                        consultation_id, superseded)
+        logger.info('consultation: visit=%s SOAP job=%s queued', consultation_id, job.get('id'))
+        return {'job': public_job(job)}
     except APIError as exc:
         raise HTTPException(409 if exc.code == 'P0001' else 503, 'Could not start SOAP processing. Refresh and retry.') from None
     except (StorageError, OSError, service.ConsultationServiceUnavailable):
@@ -210,11 +236,17 @@ def processing_status(consultation_id: UUID):
 @router.post('/consultations/{consultation_id}/processing/{job_id}/retry', status_code=202)
 def retry_processing(consultation_id: UUID, job_id: UUID):
     _editable(str(consultation_id))
+    logger.info('consultation: visit=%s job=%s retry requested', consultation_id, job_id)
     try:
         job = jobs.client().rpc('retry_consultation_job', {'p_visit': str(consultation_id), 'p_job': str(job_id)}).execute().data
         return {'job': public_job(job)}
     except APIError as exc:
-        raise HTTPException(409 if exc.code == 'P0001' else 503, 'Could not retry processing. Refresh the consultation.') from None
+        logger.warning('consultation: visit=%s job=%s retry rejected (code=%s)', consultation_id, job_id, exc.code)
+        raise HTTPException(
+            409 if exc.code == 'P0001' else 503,
+            'Could not retry processing. If this job has already failed repeatedly, '
+            'start a new recording or regenerate SOAP instead.',
+        ) from None
 
 
 def _save_transcript_draft(visit, segments):
