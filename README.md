@@ -2,14 +2,16 @@
 
 An AI-assisted patient and doctor platform for a multi-hospital network.
 
-- [Architecture flowcharts](docs/Architecture.md): booking and consultation flows,
-  including libraries, model calls and storage.
+- [Architecture flowcharts](docs/Architecture.md): booking, consultation/SOAP,
+  follow-up linking, helpdesk/reports and pharmacy fulfillment flows, including
+  libraries, model calls and storage.
 - [Product requirements](docs/PRD.md) and [UI design](docs/UI_Design.md).
 - [Workflow](docs/Workflow.md): phased delivery plan.
 - [Phase 1 progress](docs/Progress/Phase1.md): patient portal and booking.
 - [Phase 2 progress](docs/Progress/Phase2.md): doctor portal and consultation scribe.
 - [Phase 3 progress](docs/Progress/Phase3.md): symptom catalogue and appointment schema.
 - [Phase 4 progress](docs/Progress/Phase4.md): pharmacist portal, catalogue and stock.
+- [Phase 6 progress](docs/Progress/Phase6.md): follow-up appointments, helpdesk and reports.
 
 ## What works today
 
@@ -71,6 +73,22 @@ and signed snapshots use configured S3 storage or a local filesystem fallback.
 - Then apply the [consultation processing and prescription migrations](docs/Consultation-processing.md#deployment)
   for background transcription/SOAP and Supabase prescription drafts.
 
+### Follow-up appointments, helpdesk and reports
+
+- Patients can mark a new booking as a follow-up to any of their completed
+  appointments. The booking RPC writes the link atomically with the slot
+  reservation; the link is immutable and rejected if it would point to another
+  patient, a non-completed visit, a cycle, or a visit completed after the new
+  one. Patient, doctor and helpdesk detail screens link to the previous visit.
+- A new Helpdesk portal (demo phone `+919800000002`) lists consultations across
+  all patients and doctors, filterable by doctor, specialty, day and time. Its
+  detail view reuses the doctor portal's SOAP styling but is read-only for
+  clinical content — no recording, editing, prescribing or signing.
+- A shared Reports dialog (patient, doctor and helpdesk) supports uploading
+  (assigned doctor and helpdesk only, PDF/PNG/JPEG up to 10 MB) and viewing
+  consultation reports, stored via the same S3/local storage adapter and
+  tracked in `consultation_reports` with per-request access checks.
+
 ## Tech stack
 
 Python 3.12, FastAPI, Pydantic, LangGraph, Supabase (PostgreSQL and Auth),
@@ -84,11 +102,13 @@ backend/
   app/
     main.py             API entry point and routers
     config.py           Environment-based settings
-    appointments.py     Shared appointment operations
+    appointments.py     Shared appointment operations, follow-up linking
+    care_records.py     Helpdesk identification/listing and consultation reports
     book_appointment/   Intake graph, Jev prompts, de-identification and catalogue
     patient/            Patient identity, profile and appointment APIs
     doctor/             Doctor identity and uploaded signatures
     consultation/       Transcription, SOAP graph, review and finalization
+    pharmacy/           Pharmacist identity, catalogue, stock and reservations
     storage.py          S3/local storage interface
   database/             Phase SQL migrations
   scripts/              Migration runner and synthetic data helpers
@@ -96,10 +116,12 @@ backend/
   .env.example          Configuration template
 frontend/
   src/
-    auth/               Patient and doctor session contexts
-    components/         Shared controls
+    auth/               Patient, doctor, pharmacist and helpdesk session contexts
+    components/         Shared controls, Reports dialog
     pages/patient/      Booking, profile and appointment screens
     pages/doctor/       Consultation, recording and SOAP screens
+    pages/pharmacy/     Catalogue, stock and prescription fulfillment screens
+    pages/helpdesk/     Cross-patient consultation listing and detail screens
     theme.css           Shared design tokens
   tests/                Playwright flows and accessibility checks
 docs/
@@ -167,6 +189,19 @@ For a fresh database, apply them in this order:
 3. phase_1_6.sql: emergency specialty snapshot.
 4. phase_2_1.sql: doctor identity/signatures and consultation fields on appointments.
 5. phase_2_2.sql: signed-snapshot reference and atomic booking/emergency assignment.
+6. phase_3.sql: `symptom_text`/`specialty_id` schema, supported specialties and
+   updated booking RPC; phase_3_cleanup.sql resets stale appointment/intake rows.
+7. phase_4_1.sql and phase_4_1_seed.sql: pharmacist identity and medicine catalogue/stock.
+8. phase_4_3.sql: prescription review/signing and stock reservation.
+9. consultation_processing.sql: background transcription/SOAP processing state.
+10. consultation_prescriptions.sql: Supabase-backed prescription drafts.
+11. pharmacy_reservation_medicines.sql: backfill and enforce per-medicine reservations.
+12. phase_6_followups_reports.sql: follow-up appointment linking and
+    `consultation_reports` table.
+
+See [Phase 4](docs/Progress/Phase4.md), [Consultation processing](docs/Consultation-processing.md)
+and [Phase 6](docs/Progress/Phase6.md) for setup notes specific to each file,
+including the Phase 4.1 demo pharmacist phone used by several flows.
 
 For example, from backend:
 
@@ -237,5 +272,7 @@ See the progress documents for recorded test results and manual validation gaps.
   omitted from previously signed snapshots.
 - The application does not persist raw audio. Failed uploads can be retried while
   the recording remains in the browser tab; provider retention is separate.
-- Front-desk assignment UI, pharmacy and notification flows remain future work.
-  No Docker setup is included.
+- A dedicated front-desk assignment screen for pending emergencies remains
+  future work; assignment is handled through the explicit assignment API only.
+- Notification flows (SMS/email/push) are not implemented. No Docker setup
+  is included.
