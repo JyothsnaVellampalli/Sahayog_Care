@@ -52,7 +52,8 @@ def test_traced_state_only_carries_de_identified_content():
     payload = soap_graph.Payload([{"text": "बुखार नहीं है"}], adapter)
     token = soap_graph._PAYLOAD.set(payload)
     try:
-        updates = list(soap_graph._GRAPH.stream({"stage": "started"}, stream_mode="updates"))
+        config = {"configurable": {"thread_id": "test-traced-state"}}
+        updates = list(soap_graph._GRAPH.stream({"stage": "started"}, config=config, stream_mode="updates"))
     finally:
         soap_graph._PAYLOAD.reset(token)
     assert [next(iter(u)) for u in updates] == ["validate_input", "deidentify", "translate_to_english", "generate_soap", "validate_soap", "medicine_prescription"]

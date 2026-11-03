@@ -13,6 +13,10 @@ An AI-assisted patient and doctor platform for a multi-hospital network.
 - [Phase 3 progress](docs/Progress/Phase3.md): symptom catalogue and appointment schema.
 - [Phase 4 progress](docs/Progress/Phase4.md): pharmacist portal, catalogue and stock.
 - [Phase 5 progress](docs/Progress/Phase5.md): durable consultation processing and memory.
+- [Phase 6 progress](docs/Progress/Phase6.md): search ingestion (6.1),
+  hybrid retrieval (6.2) and the "Ask your query" patient chat agent (6.3) —
+  all complete and confirmed live end-to-end, including the Postgres
+  checkpointer and a real browser click-through.
 
 ## What works today
 
@@ -33,6 +37,10 @@ An AI-assisted patient and doctor platform for a multi-hospital network.
 - My appointments includes booked visits and pending emergencies. Patients can
   edit symptoms/history before consultation starts and view/download signed
   summaries after completion. Intake drafts are scoped to the patient/browser tab.
+- Ask your query: a chat tab backed by a LangGraph tool-calling agent that
+  answers questions about the patient's own symptoms, visit summaries and
+  reports, with every claim backed by a real, clickable reference chunk —
+  never another patient's data. See [Phase 6 progress](docs/Progress/Phase6.md).
 
 ### Doctor portal and consultation scribe
 
@@ -180,6 +188,9 @@ Model IDs below are code defaults and can be overridden in the environment.
 | SHOW_SPEECH_TRANSCRIPTS | Default false; show transcript/edit controls for validation when true. This is not access control. |
 | AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET, S3_PREFIX | Optional object storage; otherwise backend/storage is used. |
 | LANGSMITH_* | Optional tracing configuration for both workflows. |
+| OPENROUTER_EMBEDDINGS_MODEL, EMBEDDING_DIM | Embedding model (via OpenRouter) and its output dimension; must match the OpenSearch index mapping. |
+| OPENSEARCH_ENDPOINT, OPENSEARCH_INDEX | Search ingestion (Phase 6.1) domain and index name. See [Phase 6.1 setup](docs/Progress/Phase6.md#required-setup-you-do-this--nothing-here-provisions-aws-for-you). |
+| OPENSEARCH_AWS_ACCESS_KEY_ID, OPENSEARCH_AWS_SECRET_ACCESS_KEY | Optional; fall back to AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY above when unset. |
 
 ### Database setup
 
@@ -208,6 +219,11 @@ For a fresh database, apply them in this order:
 15. consultation_regenerate_fix.sql: a forced SOAP regenerate now supersedes
     a stuck/active SOAP job instead of silently attaching to it (apply after
     phase_5_consultation_memory.sql).
+16. search_ingestion.sql: the decoupled search-ingestion job queue (Phase
+    6.1). Only needed once you've completed the
+    [AWS OpenSearch setup](docs/Progress/Phase6.md#required-setup-you-do-this--nothing-here-provisions-aws-for-you) —
+    apply after phase_1_3.sql, then run `scripts/create_search_index.py`
+    and `scripts/backfill_search_index.py`.
 
 See [Phase 4](docs/Progress/Phase4.md) and [Phase 5](docs/Progress/Phase5.md)
 for setup notes specific to each file, including the Phase 4.1 demo

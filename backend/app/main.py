@@ -27,6 +27,9 @@ from app.consultation.router import router as consultation_router
 from app.patient.router import router as patient_router
 from app.pharmacy.router import router as pharmacy_router
 from app.consultation.jobs import worker
+from app.search.jobs import worker as search_worker
+from app.search.router import router as search_router
+from app.chat.router import router as chat_router
 from app.care_records import router as care_records_router
 
 logger = logging.getLogger(__name__)
@@ -35,13 +38,17 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app):
     workers = [asyncio.create_task(worker()) for _ in range(2)] if settings.supabase_configured else []
-    logger.info("app: startup complete, %d consultation worker(s) running", len(workers))
+    # No-op until OpenSearch is configured (see docs/Progress/Phase6.md) --
+    # avoids queuing search ingestion jobs that would just fail forever.
+    search_workers = [asyncio.create_task(search_worker())] if settings.opensearch_configured else []
+    logger.info("app: startup complete, %d consultation worker(s), %d search worker(s) running",
+                len(workers), len(search_workers))
     try:
         yield
     finally:
-        for task in workers:
+        for task in workers + search_workers:
             task.cancel()
-        await asyncio.gather(*workers, return_exceptions=True)
+        await asyncio.gather(*workers, *search_workers, return_exceptions=True)
         logger.info("app: shutdown complete")
 
 app = FastAPI(
@@ -65,6 +72,8 @@ app.include_router(doctor_router)
 app.include_router(consultation_router)
 app.include_router(pharmacy_router)
 app.include_router(care_records_router)
+app.include_router(search_router)
+app.include_router(chat_router)
 
 
 @app.get("/api/settings", tags=["settings"])

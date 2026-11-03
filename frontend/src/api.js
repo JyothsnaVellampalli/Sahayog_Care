@@ -296,3 +296,27 @@ export function updateAppointmentDetails(patientId, appointmentId, accessToken, 
     method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` }, body: JSON.stringify(payload),
   });
 }
+
+export function fetchChatHistory(patientId, accessToken) {
+  return request(`/api/patients/${encodeURIComponent(patientId)}/chat`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function askQuery(patientId, message, accessToken) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+  try {
+    return await request(`/api/patients/${encodeURIComponent(patientId)}/chat`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ message }), signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("That's taking longer than expected. Please try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

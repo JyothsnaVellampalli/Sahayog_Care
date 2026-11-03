@@ -79,6 +79,39 @@ class Settings(BaseSettings):
             self.aws_access_key_id and self.aws_secret_access_key and self.s3_bucket
         )
 
+    # Phase 6.1: search ingestion for the future patient chatbot. All optional;
+    # the ingestion worker and the enqueue hooks are no-ops until these are set.
+    openrouter_embeddings_model: str | None = None
+    embedding_dim: int = 2048
+    opensearch_endpoint: str | None = None
+    opensearch_index: str = "sahayog-care-chunks"
+    # Optional: a dedicated, narrowly-scoped IAM user for OpenSearch, kept
+    # separate from aws_access_key_id/aws_secret_access_key (S3) so a leaked
+    # credential can't reach the other service. Falls back to the S3
+    # credentials below when unset -- the project owner chose to grant the
+    # existing IAM user OpenSearch access too, rather than create a second one.
+    opensearch_aws_access_key_id: str | None = None
+    opensearch_aws_secret_access_key: str | None = None
+
+    @property
+    def opensearch_access_key(self) -> str | None:
+        return self.opensearch_aws_access_key_id or self.aws_access_key_id
+
+    @property
+    def opensearch_secret_key(self) -> str | None:
+        return self.opensearch_aws_secret_access_key or self.aws_secret_access_key
+
+    @property
+    def embeddings_configured(self) -> bool:
+        return bool(self.openrouter_api_key and self.openrouter_embeddings_model)
+
+    @property
+    def opensearch_configured(self) -> bool:
+        return bool(
+            self.opensearch_endpoint and self.opensearch_access_key
+            and self.opensearch_secret_key and self.embeddings_configured
+        )
+
     # Phase 5: a direct Postgres connection string (Supabase "Session pooler"
     # URI) for the SOAP graph's LangGraph checkpointer. Optional: when unset,
     # the graph compiles and runs exactly as before, without checkpointing.

@@ -335,7 +335,11 @@ def create_emergency_intake(
         **({"linked_appointment_id": linked_appointment_id} if linked_appointment_id else {}),
     }
     res = client.table("emergency_intakes").insert(row).execute()
-    return (res.data or [None])[0]
+    saved = (res.data or [None])[0]
+    if saved and saved.get("id"):
+        from app.search import jobs as search_jobs
+        search_jobs.enqueue("EMERGENCY_INTAKE", saved["id"])
+    return saved
 
 
 def list_open_emergencies(patient_id: str) -> list[dict]:

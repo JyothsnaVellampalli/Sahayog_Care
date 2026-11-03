@@ -37,6 +37,19 @@ python-multipart==0.0.20
 langgraph-checkpoint-postgres==3.2.0
 psycopg[binary,pool]==3.2.3
 
+# --- Phase 6.1: search ingestion for the future patient chatbot ---
+# AWS OpenSearch client; AWS4Auth signing reuses boto3's bundled botocore.
+opensearch-py==3.2.0
+# Plain text-layer extraction from PDF reports (no OCR for scanned images).
+pypdf==6.21.4
+
+# --- Phase 6.3: patient chatbot agent ---
+# langgraph.prebuilt.create_react_agent needs a real LangChain chat model
+# (not the project's own OpenRouterAdapter/raw OpenAI SDK client) -- pointed
+# at OpenRouter via the same OPENROUTER_API_KEY/base URL. Matches the
+# already-installed langchain-core version.
+langchain-openai==1.7.3
+
 # --- Optional, stronger de-identification ---
 # The de-identification node works out of the box with a built-in regex scrubber.
 # For ML-backed PII detection (PRD section 7 names presidio), additionally install

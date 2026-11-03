@@ -318,8 +318,14 @@ def run_soap(segments, adapter=None, medicines=None, on_prescription=None, threa
     config = run_config(thread_id)
     config.update(run_name="doctor_consultation_soap", tags=["doctor", "translation", "soap"], run_id=uuid4())
     config["metadata"] = {**config["metadata"], "workflow": "doctor_consultation_soap"}
-    if thread_id and _GRAPH.checkpointer:
-        config["configurable"] = {**config.get("configurable", {}), "thread_id": thread_id}
+    if _GRAPH.checkpointer:
+        # LangGraph requires a thread_id/checkpoint_ns/checkpoint_id in
+        # `configurable` whenever the compiled graph has *any* checkpointer
+        # bound, even for a call that doesn't care about resuming. Without a
+        # real thread_id, use a disposable one -- this run still completes
+        # normally, it just isn't resumable (same as before checkpointing
+        # existed for ad hoc, non-resumable callers like the unit tests).
+        config["configurable"] = {**config.get("configurable", {}), "thread_id": thread_id or str(uuid4())}
     logger.info("soap visit=%s: starting (segments=%d)", consultation_id, len(segments))
     try:
         _GRAPH.invoke({"stage": "started"}, config=config)

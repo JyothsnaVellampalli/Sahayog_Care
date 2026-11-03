@@ -6,6 +6,7 @@ import PatientPortal from "./pages/patient/PatientPortal.jsx";
 import BookAppointment from "./pages/patient/BookAppointment.jsx";
 import AppointmentDetail from "./pages/patient/AppointmentDetail.jsx";
 import MyAppointments from "./pages/patient/MyAppointments.jsx";
+import AskQuery from "./pages/patient/AskQuery.jsx";
 import DoctorLogin from "./pages/doctor/DoctorLogin.jsx";
 import DoctorPortal from "./pages/doctor/DoctorPortal.jsx";
 import SignatureGate from "./pages/doctor/SignatureGate.jsx";
@@ -52,7 +53,7 @@ export default function App() {
     const main = document.querySelector("main");
     if (main) { main.setAttribute("tabindex", "-1"); main.focus({ preventScroll: true }); }
     window.scrollTo(0, 0);
-    const section = pathname.includes("my-appointments") ? "My appointments" : pathname.includes("book-appointment") ? "Book an appointment" : pathname.includes("consultations") ? "Consultations" : pathname.includes("signature") || pathname.includes("profile") ? "Digital signature" : pathname.includes("login") ? "Sign in" : "Welcome";
+    const section = pathname.includes("ask-query") ? "Ask your query" : pathname.includes("my-appointments") ? "My appointments" : pathname.includes("book-appointment") ? "Book an appointment" : pathname.includes("consultations") ? "Consultations" : pathname.includes("signature") || pathname.includes("profile") ? "Digital signature" : pathname.includes("login") ? "Sign in" : "Welcome";
     document.title = `${pathname === '/pharmacist/stock' ? 'Medicine stock' : section} | Sahayog Care`;
   }, [pathname]);
   return (
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="book-appointment" element={<BookAppointment />} />
         <Route path="my-appointments" element={<MyAppointments />} />
         <Route path="my-appointments/:appointmentId" element={<AppointmentDetail />} />
+        <Route path="ask-query" element={<AskQuery />} />
       </Route>
 
       {/* Doctor */}

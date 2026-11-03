@@ -79,5 +79,7 @@ def close(consultation_id, doctor_id, draft: soap.SoapDraft):
         raise service.ConsultationError("Consultation changed. Reload to see its saved status.")
     saved = result.data
     logger.info("consultation: visit=%s signed and closed by doctor=%s", visit['id'], doctor_id)
+    from app.search import jobs as search_jobs
+    search_jobs.enqueue("CONSULTATION_SIGNED", visit['id'])
     return {**visit, 'status': saved['status'], 'completed_at': saved['completed_at'],
             'finalised_record_key': saved['finalised_record_key']}

@@ -22,6 +22,9 @@ def book(client, patient_id, slot_id, reason, idempotency_key,
     }).execute()
     logger.info("booking: slot=%s reserved appointment_id=%s status=%s",
                 slot_id, (result.data or {}).get("id"), (result.data or {}).get("status"))
+    if result.data and result.data.get("id"):
+        from app.search import jobs as search_jobs
+        search_jobs.enqueue("APPOINTMENT", result.data["id"])
     return result.data
 
 

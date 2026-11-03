@@ -238,6 +238,6 @@ async def worker():
                 await asyncio.sleep(2)
         except asyncio.CancelledError:
             raise
-        except Exception:
-            logger.warning('consultation: job queue unavailable; retrying')
+        except Exception as exc:
+            logger.warning('consultation: job queue unavailable (%s); retrying', type(exc).__name__)
             await asyncio.sleep(10)

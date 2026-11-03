@@ -15,6 +15,7 @@ import "./PatientPortal.css";
 const NAV = [
   { to: "book-appointment", label: "Book an appointment" },
   { to: "my-appointments", label: "My appointments" },
+  { to: "ask-query", label: "Ask your query" },
 ];
 
 export default function PatientPortal() {

@@ -157,6 +157,8 @@ async def upload_report(appointment_id: UUID, file: UploadFile = File(...),
     except Exception:
         # Keep the object on ambiguous DB timeout: a committed row must never lose its file.
         raise HTTPException(503, 'Could not confirm the upload. Refresh reports before retrying.') from None
+    from app.search import jobs as search_jobs
+    search_jobs.enqueue('REPORT', report_id)
     return {k: rows[0].get(k) for k in REPORT_COLS.split(',')}
 
 

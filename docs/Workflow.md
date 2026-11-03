@@ -189,7 +189,7 @@
 
 [ ] Phase 6 - Patient Chatbot
 
-[ ] Phase 6.1 - Data Chunking and ingestion
+[x] Phase 6.1 - Data Chunking and ingestion
 ### Goals
 - Build a AWS opensearch system for patient chatbot. 
 - Patient natuarl language text input as text chunks.
@@ -199,19 +199,45 @@
 - Use `OPENROUTER_EMBEDDINGS_MODEL` from env for generating embeddings.
 - Do the data ingestion for the existing data in the system.
 - For the upcoming appointemnts and consulatations. After book_appointment and consultation flow feed the data to search system using a background job. (In pro9duiction, will run CRON to handle this).
+
 ### Done When
 - All the existing data is fed to opensearch and after each appointment booking and consultatin a background job should fed the data to search system.
 
-[ ] Phase 6.2 - Retrieval system
+See [Phase 6 progress](Progress/Phase6.md) for delivery detail. Live against
+real AWS OpenSearch; booking/signing/report-upload confirmed feeding the
+index end-to-end; backfill fully drained (208 chunks indexed, 0 failures
+after retrying a rate-limit burst — see Phase 6 progress).
+
+
+
+[x] Phase 6.2 - Retrieval system
 ### Goals
 - The retrieval should be hybrid. First filtering out chunks by patient id or doctor id or appointment id based on query and then using keyword or semantic or both searches. The search suitable has to be decided by user query. Add a Jev based retrieval choosing system, which choses metadata filtering needed and the retrieval type based on query.
+
 ### Done When
 - Retrieval should happen based on user query.
 
-[ ] Phase 6.3 - UI and querying
+See [Phase 6 progress](Progress/Phase6.md#phase-62---retrieval-system) for
+delivery detail. Tested live against the real index from Phase 6.1 — a
+conceptual query correctly chose semantic search with no filter, and a
+query naming a doctor by name correctly chose keyword search and resolved
+that doctor's real database id. `patient_id` is always a hard server-side
+filter, never something the query or the Jev planner can change.
+
+
+[x] Phase 6.3 - UI and querying
 ### Goals
+- Add a agent to respond to patient queiries. This agent should have tools to invoke retrieval mechanism added in phase6.2, invoke database to fetch information from tables.
+- Use langraph that joins the functionality of the agent connecting to tools.
+- Use langsmith tracing logging the each decision made and each tool called. Log every detail like tool calling params and the tool response.
+- Use langraph checkpointers to maintain user chat history for both showing in UI and for chat system to load history to agent.
+- If the user chat history exceeds 10 messages, summarise the history, store it and pass to agent.
 - Add a `Ask your query` tab in patient portal. Refer to existing design system and the UI that blends with existing system.
-- User should ask any query on the consulatations and the system should be able to response.
+- Patient should be able to ask any query on the consulatations and the system should be able to response.
+- Patient should not get any information about others or irrelevant informat. Always back your responses with proper refernces like SOAP chunks or reports chunks. DO NOT use technical words while responding to patient, it should be in simple language yet giving correct responses with relevant proofs.
+
+### Done When
+- Patient should be able to see the `Ask query` tab in patient portal and get the relevant responses.
 
 
 [ ] Phase 7 - Notification engine

@@ -177,3 +177,77 @@ flowchart TD
     class A,G,H,I,J human
     class F,M alert
 ```
+
+## Search ingestion and retrieval (patient chatbot foundation)
+
+```mermaid
+flowchart TD
+    A["Booking · Signing · Report upload<br/>FastAPI · Fire-and-forget enqueue"]
+    B[("search_ingestion_jobs<br/>Supabase PostgreSQL · Decoupled queue, no consent guard")]
+    C["Search worker · Python<br/>Chunk symptom text / SOAP sections / report PDF text"]
+    D["Embed each chunk<br/>OpenRouter · OPENROUTER_EMBEDDINGS_MODEL"]
+    E[("OpenSearch index<br/>AWS · knn_vector + patient/doctor/appointment metadata")]
+
+    A --> B --> C --> D --> E
+
+    F["Patient query<br/>React · Ask your query (Phase 6.3)"]
+    G["Verify patient identity<br/>FastAPI · Supabase bearer token"]
+    H["Candidate filters<br/>Patient's own doctors/appointments only"]
+    I["ONE Jev call · OpenRouter<br/>Retrieval type + optional doctor/appointment narrowing"]
+    J{"patient_id filter<br/>always applied · never from query or model"}
+    K["Keyword / Semantic / Hybrid search<br/>OpenSearch · RRF merge for hybrid"]
+    L["Ranked chunks<br/>FastAPI → React"]
+
+    F --> G --> H --> I --> J --> K --> L
+    E -.->|queried by| K
+
+    classDef model fill:#ede9fe,stroke:#7c3aed,color:#312e81
+    classDef data fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef human fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef alert fill:#fff1f2,stroke:#e11d48,color:#881337
+    class D,I model
+    class B,E data
+    class A,F,L human
+    class J alert
+```
+
+## Patient chat agent (Phase 6.3)
+
+```mermaid
+flowchart TD
+    A["Patient message<br/>React · Ask your query tab"]
+    B["Verify patient identity<br/>FastAPI · Supabase bearer token"]
+    C["Load checkpointed history<br/>Postgres · thread_id = chat:&lt;patient_id&gt;"]
+    D{"History &gt; 10 messages?"}
+    E["Summarize older turns<br/>OpenRouter · one extra model call"]
+    F["LangGraph tool-calling agent<br/>create_react_agent · OpenRouter chat model"]
+    G["search_my_records(query)<br/>Phase 6.2 plan_query → search_chunks"]
+    H["list_my_appointments()<br/>get_appointment_details(id)"]
+    I[("Postgres checkpointer<br/>CONSULTATION_CHECKPOINT_DB_URL · same pool pattern as SOAP graph")]
+    J["Reply + references<br/>References built ONLY from search_my_records tool artifacts"]
+    K["React · Markdown-rendered reply<br/>+ clickable reference chips"]
+
+    A --> B --> C --> D
+    D -->|Yes| E --> F
+    D -->|No| F
+    F --> G
+    F --> H
+    G -.->|patient_id always filtered| F
+    F --> I
+    F --> J --> K
+
+    classDef model fill:#ede9fe,stroke:#7c3aed,color:#312e81
+    classDef data fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef human fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef alert fill:#fff1f2,stroke:#e11d48,color:#881337
+    class E,F model
+    class C,I data
+    class A,K human
+    class G alert
+```
+
+Tools are rebuilt per request, closing over the already-verified
+`patient_id` — the model has no tool parameter that could name a
+different patient. Citations are structural, not model-claimed: only
+`ToolMessage`s from `search_my_records` contribute to `references`, never
+prose the model writes on its own.
