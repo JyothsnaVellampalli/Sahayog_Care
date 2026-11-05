@@ -104,6 +104,13 @@ export default function PatientLogin() {
           {step === "credentials" ? "Patient sign in" : "Create your profile"}
         </h1>
 
+        {step === "credentials" && (
+          <p className="login__demo">
+            Demo patient — phone <strong>+9196500001</strong>, password{" "}
+            <strong>oX1vkYUJcD4BTmjh</strong>
+          </p>
+        )}
+
         {step === "credentials" ? (
           <form className="login__form" onSubmit={handleCredentials}>
             <p className="login__intro">

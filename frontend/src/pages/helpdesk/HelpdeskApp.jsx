@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { helpdeskGet, helpdeskIdentify } from '../../api.js';
 import Reports from '../../components/Reports.jsx';
 import PrescriptionList from '../../components/PrescriptionList.jsx';
+import '../patient/PatientLogin.css';
 import '../doctor/DoctorPortal.css';
 import '../doctor/ConsultationsList.css';
 import '../doctor/ConsultationView.css';
@@ -11,19 +12,43 @@ import './Helpdesk.css';
 const SESSION = 'sahayog.helpdesk.session';
 function loadSession() { try { return JSON.parse(localStorage.getItem(SESSION) || 'null'); } catch { return null; } }
 function localDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function initials(name) {
+  if (!name) return 'HD';
+  const parts = name.trim().split(/\s+/);
+  return (parts[0]?.[0] || 'H').concat(parts[1]?.[0] || '').toUpperCase();
+}
 
 export default function HelpdeskApp() {
   const [staff, setStaff] = useState(loadSession);
   const navigate = useNavigate();
   function signOut() { localStorage.removeItem(SESSION); setStaff(null); navigate('/helpdesk/login'); }
-  return <div className="dportal"><header className="dportal__header"><Link className="dportal__brand" to="/">Sahayog Care</Link>
-    <Link to="/helpdesk/consultations">Consultations</Link><span>{staff?.full_name || 'Helpdesk'}</span>
-    {staff && <button className="btn btn--secondary" onClick={signOut}>Sign out</button>}</header>
-    <main className="dportal__content"><Routes>
-      <Route path="login" element={staff ? <Navigate to="/helpdesk/consultations" replace /> : <Login onLogin={profile => { localStorage.setItem(SESSION, JSON.stringify(profile)); setStaff(profile); navigate('/helpdesk/consultations'); }} />} />
-      <Route path="consultations" element={staff ? <Consultations staff={staff} /> : <Navigate to="/helpdesk/login" replace />} />
-      <Route path="consultations/:consultationId" element={staff ? <ReadConsultation staff={staff} /> : <Navigate to="/helpdesk/login" replace />} />
-      <Route path="*" element={<Navigate to={staff ? '/helpdesk/consultations' : '/helpdesk/login'} replace />} />
+  if (!staff) return <Routes>
+    <Route path="login" element={<Login onLogin={profile => { localStorage.setItem(SESSION, JSON.stringify(profile)); setStaff(profile); navigate('/helpdesk/consultations'); }} />} />
+    <Route path="*" element={<Navigate to="/helpdesk/login" replace />} />
+  </Routes>;
+  return <div className="dportal">
+    <a className="skip-link" href="#helpdesk-content">Skip to content</a>
+    <header className="dportal__header">
+      <div className="dportal__left">
+        <button className="dportal__brand" type="button" onClick={() => navigate('/')} aria-label="Sahayog Care home">
+          <span className="dportal__brand-mark" aria-hidden="true" />
+          Sahayog Care
+        </button>
+        <nav className="dportal__nav" aria-label="Helpdesk portal sections">
+          <NavLink to="/helpdesk/consultations" className={({ isActive }) => `dportal__navitem${isActive ? ' dportal__navitem--active' : ''}`}>Consultations</NavLink>
+        </nav>
+      </div>
+      <div className="dportal__profile">
+        <span className="dportal__name">{staff.full_name || 'Helpdesk'}</span>
+        <span className="dportal__avatar" aria-hidden="true">{initials(staff.full_name)}</span>
+        <button className="dportal__signout" type="button" onClick={signOut}>Sign out</button>
+      </div>
+    </header>
+    <main className="dportal__content" id="helpdesk-content" tabIndex="-1"><Routes>
+      <Route path="login" element={<Navigate to="/helpdesk/consultations" replace />} />
+      <Route path="consultations" element={<Consultations staff={staff} />} />
+      <Route path="consultations/:consultationId" element={<ReadConsultation staff={staff} />} />
+      <Route path="*" element={<Navigate to="/helpdesk/consultations" replace />} />
     </Routes></main></div>;
 }
 
@@ -32,9 +57,21 @@ function Login({ onLogin }) {
   async function submit(e) { e.preventDefault(); setBusy(true); setError('');
     try { onLogin((await helpdeskIdentify(phone.trim())).profile); } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
-  return <form className="helpdesk-login" onSubmit={submit}><h1>Helpdesk sign in</h1><p>View consultations and manage reports.</p>
-    <label>Phone number<input required type="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} /></label>
-    {error && <p role="alert">{error}</p>}<button className="btn btn--primary" disabled={busy}>{busy ? 'Signing in...' : 'Continue'}</button></form>;
+  return <main className="login" id="main-content">
+    <Link className="login__brand" to="/">Sahayog Care</Link>
+    <section className="login__card" aria-labelledby="helpdesk-login-title">
+      <h1 className="login__title" id="helpdesk-login-title">Helpdesk sign in</h1>
+      <form className="login__form" onSubmit={submit}>
+        <p className="login__intro">Enter your registered phone number to continue.</p>
+        <label className="login__field">
+          <span>Phone number</span>
+          <input required type="tel" autoComplete="tel" placeholder="+91XXXXXXXXXX" value={phone} onChange={e => setPhone(e.target.value)} />
+        </label>
+        <button className="login__submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : 'Continue'}</button>
+      </form>
+      {error && <p className="login__error" role="alert">{error}</p>}
+    </section>
+  </main>;
 }
 
 function Consultations({ staff }) {

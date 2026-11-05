@@ -42,7 +42,7 @@ const PROFILES = [
     id: "front-desk",
     label: "Helpdesk",
     initial: "F",
-    color: "var(--color-neutral)",
+    color: "var(--color-primary-hover)",
     description: "View consultations and manage reports.",
     ready: true,
   },

@@ -1,7 +1,6 @@
-.helpdesk-login { max-width: 420px; margin: 40px auto; display: grid; gap: 18px; padding: 28px; border: 1px solid #d8e2df; border-radius: 16px; background: white; }
-.helpdesk-login label, .helpdesk-filters label { display: grid; gap: 8px; }
+.helpdesk-filters label { display: grid; gap: 8px; }
 .helpdesk-filters > div { display: grid; gap: 8px; }
-.helpdesk-login input, .helpdesk-filters input, .helpdesk-filters select { font: inherit; padding: 10px; border: 1px solid #9aafa7; border-radius: 8px; min-width: 0; }
+.helpdesk-filters input, .helpdesk-filters select { font: inherit; padding: 10px; border: 1px solid #9aafa7; border-radius: 8px; min-width: 0; }
 .helpdesk-filters { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 16px; margin: 24px 0; }
 .helpdesk-list { list-style: none; padding: 0; display: grid; gap: 14px; }
 .helpdesk-list a { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; color: inherit; text-decoration: none; padding: 20px; border: 1px solid #d8e2df; border-radius: 12px; background: white; }
